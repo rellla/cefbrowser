@@ -41,47 +41,44 @@
     window.oipfObjectFactory.isObjectSupported = function (mimeType) {
         return mimeType === 'video/broadcast' ||
             mimeType === 'video/mpeg' ||
+            mimeType === 'video/mp4' ||
+            mimeType === 'video/mpeg4' ||
+            mimeType === 'audio/mp4' ||
+            mimeType === 'audio/mpeg' ||
+            mimeType === 'application/dash+xml' ||
             mimeType === 'application/oipfApplicationManager' ||
             mimeType === 'application/oipfCapabilities' ||
-            mimeType === 'application/oipfConfiguration' ||
-            mimeType === 'application/oipfDrmAgent' ||
-            mimeType === 'application/oipfParentalControlManager' ||
-            mimeType === 'application/oipfSearchManager';
+            mimeType === 'application/oipfConfiguration';
     };
+
+    // The factory methods return embedded objects, which the application adds to
+    // the DOM. The video objects are detected and handled by videoobserver.js.
+    function createObject(mimeType) {
+        let obj = document.createElement('object');
+        obj.type = mimeType;
+        return obj;
+    }
+
     window.oipfObjectFactory.createVideoBroadcastObject = function () {
-        return class VideoBroadcastObject {
-            bindToCurrentChannel() { }
-            setChannel() { }
-            onblur(evt) { }
-            onfocus(evt) { }
-            addEventListener(eventName, callback, useCapture) {  }
-            removeEventListener(eventName, callback, useCapture) { }
-            onPlayStateChange(evt) { }
-            onPlaySpeedChanged(evt) { }
-            onPlaySpeedsArrayChanged(evt) { }
-            onPlayPositionChanged(evt) { }
-            onFullScreenChange(evt) { }
-            onParentalRatingChange(evt) { }
-            onParentalRatingError(evt) { }
-            onDRMRightsError(evt) { }
-        };
+        return createObject('video/broadcast');
     };
     window.oipfObjectFactory.createVideoMpegObject = function () {
-        return class VideoMpegObject {
-            onblur(evt) { }
-            onfocus(evt) { }
-            addEventListener(eventName, callback, useCapture) { }
-            removeEventListener(eventName, callback, useCapture) { }
-            onPlayStateChange(evt) { }
-            onPlaySpeedChanged(evt) { }
-            onPlaySpeedsArrayChanged(evt) { }
-            onPlayPositionChanged(evt) { }
-            onFullScreenChange(evt) { }
-            onParentalRatingChange(evt) { }
-            onParentalRatingError(evt) { }
-            onDRMRightsError(evt) { }
-        };
-        //return new VideoMpegObject();
+        return createObject('video/mp4');
+    };
+    window.oipfObjectFactory.createApplicationManagerObject = function () {
+        let obj = createObject('application/oipfApplicationManager');
+        mixin(window.oipfApplicationManager, obj);
+        return obj;
+    };
+    window.oipfObjectFactory.createConfigurationObject = function () {
+        let obj = createObject('application/oipfConfiguration');
+        mixin(window.oipfConfiguration, obj);
+        return obj;
+    };
+    window.oipfObjectFactory.createCapabilitiesObject = function () {
+        let obj = createObject('application/oipfCapabilities');
+        mixin(window.oipfCapabilities, obj);
+        return obj;
     };
     window.oipfObjectFactory.onLowMemory = function () {
         // FIXME: see when we can generate this event (maybe inside the Web Inspector panel)
