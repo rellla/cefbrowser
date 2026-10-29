@@ -5,7 +5,7 @@
 #include <thrift/transport/TSocket.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
-#include <thrift/server/TThreadPoolServer.h>
+#include <thrift/server/TThreadedServer.h>
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/TBufferTransports.h>
 
@@ -32,24 +32,20 @@ using namespace ::apache::thrift::concurrency;
 using namespace ::common;
 
 scoped_refptr<CefBrowser> currentBrowser;
-TThreadPoolServer *thriftServer;
+TThreadedServer *thriftServer;
 
 void startServer(BrowserParameter bParam) {
     BrowserServer::setBrowserParameter(bParam);
 
-    const int workerCount = 4;
-    std::shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(workerCount);
-    threadManager->threadFactory(std::make_shared<ThreadFactory>());
-    threadManager->start();
-
     std::string listenIp = bParam.bindAll ? "0.0.0.0" : bParam.browserIp;
 
-    thriftServer = new TThreadPoolServer(
+    // one thread per connection: the clients keep their connections open,
+    // a fixed pool of 4 workers blocks any further client
+    thriftServer = new TThreadedServer(
             std::make_shared<CefBrowserProcessorFactory>(std::make_shared<BrowserCloneFactory>()),
             std::make_shared<TServerSocket>(listenIp, bParam.browserPort),
             std::make_shared<TBufferedTransportFactory>(),
-            std::make_shared<TBinaryProtocolFactory>(),
-            threadManager);
+            std::make_shared<TBinaryProtocolFactory>());
 
     thriftServer->serve();
 }
