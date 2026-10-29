@@ -664,8 +664,8 @@ function checkAddedObjectNode(summaries) {
         return;
     }
 
-    let node = summaries.added[0];
-    checkSingleObjectNode(node);
+    // several objects may be added at once
+    summaries.added.forEach((node) => checkSingleObjectNode(node));
 }
 
 function checkSingleObjectNode(node) {
