@@ -76,7 +76,7 @@ function activate_quirks(isStart) {
             document.body.style.background = '#0d1118';
             document.getElementsByTagName('html')[0].style.setProperty('background', '#0d1118');
         }
-    } else if (document.location.href.search("http://127.0.0.1" > 0) && document.location.href.search("/application/iptv/index.html") > 0) {
+    } else if (document.location.href.search("http://127.0.0.1") >= 0 && document.location.href.search("/application/iptv/index.html") > 0) {
         if (isStart) {
             _quirk_hide_element('app_area', null, null);
         } else {
