@@ -117,6 +117,10 @@ bool V8Handler::Execute(const CefString &name, CefRefPtr<CefV8Value> object, con
                 std::string reason = "Javascript StopVideo (Start after Pause)";
                 transcoderClient->Stop(streamId, reason);
                 videoReset = true;
+
+                // the VDR player is still paused and would drop all packets of the new video
+                vdrClient->Resume();
+                isVideoPaused = false;
             }
 
             TRACE("Video URL: {}", url.ToString());
