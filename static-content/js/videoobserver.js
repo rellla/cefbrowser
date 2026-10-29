@@ -105,6 +105,55 @@ async function checkMpd(nodedata) {
     return Math.max(0, Math.floor(mpdStart));
 }
 
+// video/broadcast: channel information and play state
+function addBroadcastFunctions(node) {
+    if (node._vdrBroadcast) {
+        return;
+    }
+    node._vdrBroadcast = true;
+
+    try {
+        Object.defineProperty(node, 'currentChannel', {
+            configurable: true,
+            get: () => window.HBBTV_POLYFILL_NS.currentChannel || null
+        });
+    } catch (e) {
+        console.log("currentChannel: " + e);
+    }
+
+    // 0 = unrealized, 2 = presenting
+    node.playState = 0;
+
+    const bind = node.bindToCurrentChannel;
+    node.bindToCurrentChannel = function () {
+        node.playState = 2;
+        if (typeof node.onPlayStateChange === 'function') {
+            node.onPlayStateChange(node.playState, 0);
+        }
+        let event = new Event('PlayStateChange');
+        event.state = node.playState;
+        event.error = 0;
+        node.dispatchEvent(event);
+
+        return bind ? bind.call(node) : window.HBBTV_POLYFILL_NS.currentChannel;
+    };
+
+    node.getChannelConfig = node.getChannelConfig || function () {
+        let channel = window.HBBTV_POLYFILL_NS.currentChannel;
+        let list = channel ? [channel] : [];
+
+        list.item = (i) => list[i] || null;
+        list.getChannel = (id) => list.find((c) => c.channelId === id) || null;
+        list.getChannelByTriplet = (onid, tsid, sid) => list.find((c) => c.onid === onid && c.tsid === tsid && c.sid === sid) || null;
+
+        return {
+            channelList: list,
+            favouriteLists: [],
+            currentFavouriteList: null
+        };
+    };
+}
+
 function addNodeFunctions(node) {
     node.bindToCurrentChannel = node.bindToCurrentChannel || function() {
         console.log('Node bindToCurrentChannel');
@@ -733,6 +782,7 @@ function checkSingleObjectNode(node) {
         window.addVideoOverlay(node);
 
         addNodeFunctions(node);
+        addBroadcastFunctions(node);
         promoteVideoSize(node);
     } else if ((node.type === 'video/mpeg4') ||             // mpeg4 video
         (node.type === 'video/mp4') ||               // h.264 video

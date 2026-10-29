@@ -15,6 +15,7 @@ function prepareElements() {
             console.log("Init Found TV on node: " + node);
             window.addVideoOverlay(node);
             addNodeFunctions(node);
+            addBroadcastFunctions(node);
 
             setTimeout(() => {
                 promoteVideoSize(node);
