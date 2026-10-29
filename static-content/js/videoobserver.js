@@ -185,6 +185,21 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
     }
     node._vdrManaged = true;
 
+    // HbbTV/CEA-2014: call the intrinsic handler and dispatch the DOM event
+    function notifyPlayState() {
+        if (typeof node.onPlayStateChange === 'function') {
+            try {
+                node.onPlayStateChange(node.playState);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        let playerEvent = new Event('PlayStateChange');
+        playerEvent.state = node.playState;
+        node.dispatchEvent(playerEvent);
+    }
+
     let video = document.createElement('video');
     video.type = "video/webm";
     video.src = url;
@@ -196,9 +211,7 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
     function restartAfterStop() {
         node._vdrStopped = false;
         node.playState = PLAY_STATES.connecting;
-        if (node.onPlayStateChange) {
-            node.onPlayStateChange(node.playState);
-        }
+        notifyPlayState();
 
         (async () => {
             let mpdStart = await checkMpd(originalUrl);
@@ -288,13 +301,7 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
         node.playPosition = 0;
         node.speed = 0;
 
-        if (node.onPlayStateChange) {
-            node.onPlayStateChange(node.playState);
-        } else {
-            let playerEvent = new Event('PlayStateChange');
-            playerEvent.state = node.playState;
-            node.dispatchEvent(playerEvent);
-        }
+        notifyPlayState();
 
         window.stop_video_quirk();
         return true;
@@ -320,13 +327,7 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
         }
 
         node.playState = PLAY_STATES.playing;
-        if (node.onPlayStateChange) {
-            node.onPlayStateChange(node.playState);
-        } else {
-            var playerEvent = new Event('PlayStateChange');
-            playerEvent.state = node.playState;
-            node.dispatchEvent(playerEvent);
-        }
+        notifyPlayState();
 
         window.start_video_quirk();
 
@@ -340,13 +341,7 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
         }
 
         node.playState = PLAY_STATES.paused;
-        if (node.onPlayStateChange) {
-            node.onPlayStateChange(node.playState);
-        } else {
-            let playerEvent = new Event('PlayStateChange');
-            playerEvent.state = node.playState;
-            node.dispatchEvent(playerEvent);
-        }
+        notifyPlayState();
     }, false);
 
     video && video.addEventListener && video.addEventListener('ended', function () {
@@ -357,13 +352,7 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
         }
 
         node.playState = PLAY_STATES.finished;
-        if (node.onPlayStateChange) {
-            node.onPlayStateChange(node.playState);
-        } else {
-            var playerEvent = new Event('PlayStateChange');
-            playerEvent.state = node.playState;
-            node.dispatchEvent(playerEvent);
-        }
+        notifyPlayState();
 
         window.stop_video_quirk();
 
@@ -377,19 +366,15 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
         }
 
         node.playState = PLAY_STATES.error;
-        if (node.onPlayStateChange) {
-            node.onPlayStateChange(node.playState);
-        } else {
-            var playerEvent = new Event('PlayStateChange');
-            playerEvent.state = node.playState;
-            node.error = 0; // 0 - A/V format not supported
-            node.dispatchEvent(playerEvent);
-        }
+        node.error = 0; // 0 - A/V format not supported
+        notifyPlayState();
     }, false);
 
     video && video.addEventListener && video.addEventListener('durationchange', () => {
         console.log("Video event durationchange to " + video.duration);
         node.duration = video.duration * 1000;
+        // playTime is the duration of the A/V object in ms
+        node.playTime = isFinite(video.duration) ? Math.floor(video.duration * 1000) : 0;
     }, false);
 
     video && video.addEventListener && video.addEventListener('timeupdate', function () {
@@ -442,7 +427,7 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
 
     window.addVideoOverlay(node);
 
-    node.playTime = video.duration * 1000;
+    node.playTime = 0;
     node.error = -1;
     node.type = "video/webm";
     node.data = "http://gibbet.nix"; // url;
