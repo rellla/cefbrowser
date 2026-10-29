@@ -662,7 +662,8 @@ function checkSingleObjectNode(node) {
                     // addVideoNodeTypeVideo(node, node.src, node.src);
                 } else if (node.data !== undefined) {
                     console.log("window.cefStreamVideo()");
-                    let mpdStart = await checkMpd(node.data);
+                    // node.data is the encoded localhost url, the manifest is node.src
+                    let mpdStart = await checkMpd(node.src);
                     let newUrl = window.cefStreamVideo(node.src, document.cookie, document.referrer, navigator.userAgent, mpdStart);
                     addVideoNodeTypeVideo(node, newUrl, node.src);
                     promoteVideoSize(node);
