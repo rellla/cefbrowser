@@ -194,7 +194,10 @@ bool V8Handler::Execute(const CefString &name, CefRefPtr<CefV8Value> object, con
         DEBUG("V8Handler::Execute: Trancoder finished {}", name.ToString());
 
         stopVideoThreadRunning = true;
-        std::thread stopThread(&V8Handler::stopVdrVideo, this);
+
+        // the detached thread keeps a reference, the handler may be released meanwhile (page change)
+        CefRefPtr<V8Handler> self(this);
+        std::thread stopThread([self]() { self->stopVdrVideo(); });
         stopThread.detach();
 
         DEBUG("V8Handler::Execute: Thread started {}", name.ToString());
