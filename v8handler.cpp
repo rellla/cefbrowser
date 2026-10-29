@@ -122,12 +122,17 @@ bool V8Handler::Execute(const CefString &name, CefRefPtr<CefV8Value> object, con
             TRACE("Video URL: {}", url.ToString());
 
             // 1. Step call Probe
+            // videoInfo is not touched by a failed request, don't keep the old value
             oldVideoInfo = videoInfo;
-            transcoderClient->Probe(videoInfo, url, cookies, referer, userAgent, bParam.browserIp, std::to_string(bParam.browserPort), bParam.vdrIp, std::to_string(bParam.vdrPort), std::to_string(now));
+            videoInfo.clear();
+            if (!transcoderClient->Probe(videoInfo, url, cookies, referer, userAgent, bParam.browserIp, std::to_string(bParam.browserPort), bParam.vdrIp, std::to_string(bParam.vdrPort), std::to_string(now))) {
+                videoInfo.clear();
+            }
 
             if (videoInfo.empty()) {
                 ERROR("Probe failed: Wrong video URL, a server error or another error.");
-                return false;
+                retval = CefV8Value::CreateNull(); // javascript sets the error state
+                return true;
             }
 
             TRACE("Video Info:  {} -> {}", oldVideoInfo, videoInfo);
@@ -140,14 +145,16 @@ bool V8Handler::Execute(const CefString &name, CefRefPtr<CefV8Value> object, con
             if (videoInfo.empty()) {
                 // transcoder not available
                 ERROR("Probe failed: Transcoder not available, wrong video URL or another error.");
-                return false;
+                retval = CefV8Value::CreateNull(); // javascript sets the error state
+                return true;
             }
 
             // 2. Step call StreamUrl
             if (!transcoderClient->StreamUrl(url, cookies, referer, userAgent, bParam.browserIp, std::to_string(bParam.browserPort), bParam.vdrIp, std::to_string(bParam.vdrPort), std::to_string(mpdStart))) {
                 // transcoder not available
                 ERROR("Unable to send request to transcoder");
-                return false;
+                retval = CefV8Value::CreateNull(); // javascript sets the error state
+                return true;
             }
 
             while (stopVideoThreadRunning) {
