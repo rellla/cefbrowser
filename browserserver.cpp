@@ -150,6 +150,13 @@ bool BrowserServer::StartApplication(const StartApplicationType &input) {
 }
 
 bool BrowserServer::ProcessKey(const ProcessKeyType &input) {
+    // HbbTV: the application gets only the keys of its keyset. Returning false
+    // tells VDR to handle the key itself (e.g. the numeric keys switch the channel).
+    if ((keySetGroup(input.key) & currentKeySet) == 0) {
+        DEBUG("Key {} is not in the keyset 0x{:x} of the application", input.key, currentKeySet.load());
+        return false;
+    }
+
     if ((input.key.find("VK_BACK") != std::string::npos) ||
         (input.key.find("VK_RED") != std::string::npos) ||
         (input.key.find("VK_GREEN") != std::string::npos) ||

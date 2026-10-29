@@ -225,6 +225,9 @@ void BrowserApp::OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFr
     CefRefPtr<CefV8Value> redButton = CefV8Value::CreateFunction("RedButton", handler);
     object->SetValue("cefRedButton", redButton, V8_PROPERTY_ATTRIBUTE_NONE);
 
+    CefRefPtr<CefV8Value> setKeySet = CefV8Value::CreateFunction("SetKeySet", handler);
+    object->SetValue("cefSetKeySet", setKeySet, V8_PROPERTY_ATTRIBUTE_NONE);
+
     CefRefPtr<CefV8Value> destroyApp = CefV8Value::CreateFunction("DestroyApp", handler);
     object->SetValue("cefDestroyApp", destroyApp, V8_PROPERTY_ATTRIBUTE_NONE);
 

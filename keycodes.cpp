@@ -116,3 +116,42 @@ std::unordered_map<std::string, int> keyCodes = {
         {"VK_NUMLOCK",   0x0090},    // NumLock
         {"VK_SCROLL",    0x0091}     // Rollen
 };
+
+std::atomic<int> currentKeySet(KEYSET_DEFAULT);
+
+int keySetGroup(const std::string& key) {
+    static const std::unordered_map<std::string, int> groups = {
+        {"VK_RED",        KEYSET_RED},
+        {"VK_GREEN",      KEYSET_GREEN},
+        {"VK_YELLOW",     KEYSET_YELLOW},
+        {"VK_BLUE",       KEYSET_BLUE},
+        {"VK_UP",         KEYSET_NAVIGATION},
+        {"VK_DOWN",       KEYSET_NAVIGATION},
+        {"VK_LEFT",       KEYSET_NAVIGATION},
+        {"VK_RIGHT",      KEYSET_NAVIGATION},
+        {"VK_ENTER",      KEYSET_NAVIGATION},
+        {"VK_BACK",       KEYSET_NAVIGATION},
+        {"VK_PLAY",       KEYSET_VCR},
+        {"VK_PAUSE",      KEYSET_VCR},
+        {"VK_PLAY_PAUSE", KEYSET_VCR},
+        {"VK_STOP",       KEYSET_VCR},
+        {"VK_FAST_FWD",   KEYSET_VCR},
+        {"VK_REWIND",     KEYSET_VCR},
+        {"VK_PAGE_UP",    KEYSET_SCROLL},
+        {"VK_PAGE_DOWN",  KEYSET_SCROLL},
+        {"VK_INFO",       KEYSET_INFO},
+        {"VK_0",          KEYSET_NUMERIC},
+        {"VK_1",          KEYSET_NUMERIC},
+        {"VK_2",          KEYSET_NUMERIC},
+        {"VK_3",          KEYSET_NUMERIC},
+        {"VK_4",          KEYSET_NUMERIC},
+        {"VK_5",          KEYSET_NUMERIC},
+        {"VK_6",          KEYSET_NUMERIC},
+        {"VK_7",          KEYSET_NUMERIC},
+        {"VK_8",          KEYSET_NUMERIC},
+        {"VK_9",          KEYSET_NUMERIC},
+    };
+
+    auto it = groups.find(key);
+    return it != groups.end() ? it->second : KEYSET_OTHER;
+}

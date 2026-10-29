@@ -127,11 +127,26 @@
     keyset.NUMERIC = 0x100;
     keyset.ALPHA = 0x200;
     keyset.OTHER = 0x400;
-    keyset.value = 0x1f;
-    keyset.setValue = function (value) {
-        keyset.value = value;
+    keyset.maximumValue = 0x1ff;
+    keyset.otherKeys = [];
+    keyset.supportsPointer = false;
+
+    // Keys not in the keyset are handled by VDR (e.g. numeric keys switch the channel).
+    // Without setValue() an application gets all keys except the numeric keys.
+    keyset.value = 0xff;
+    keyset.setValue = function (value, otherKeys) {
+        keyset.value = value & keyset.maximumValue;
         window.HBBTV_POLYFILL_NS.keysetSetValueCount++;
+        if (window.cefSetKeySet) {
+            window.cefSetKeySet(keyset.value);
+        }
+        return keyset.value;
     };
+
+    // a new page starts with the default keyset
+    if (window.cefSetKeySet) {
+        window.cefSetKeySet(keyset.value);
+    }
     Object.defineProperties(Application.prototype.privateData, {
         '_document': {
             value: null,

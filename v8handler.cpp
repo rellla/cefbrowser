@@ -259,6 +259,14 @@ bool V8Handler::Execute(const CefString &name, CefRefPtr<CefV8Value> object, con
 
         retval = CefV8Value::CreateBool(true);
         return true;
+    } else if (name == "SetKeySet") {
+        if (!arguments.empty() && (arguments.at(0)->IsInt() || arguments.at(0)->IsUInt() || arguments.at(0)->IsDouble())) {
+            int value = static_cast<int>(arguments.at(0)->GetDoubleValue());
+            sendMessageToProcess("KeySet", std::to_string(value));
+        }
+
+        retval = CefV8Value::CreateBool(true);
+        return true;
     } else if (name == "DestroyApp") {
         std::string channelId;
         if (!arguments.empty() && arguments.at(0)->IsString()) {

@@ -1,6 +1,7 @@
 #include <chrono>
 #include <algorithm>
 #include "browserclient.h"
+#include "keycodes.h"
 #include "database.h"
 #include "tools.h"
 #include "moviestream.h"
@@ -165,6 +166,12 @@ bool BrowserClient::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefR
         } else {
             ERROR("BrowserClient::OnProcessMessageReceived: RedButton without channelId");
         }
+    } else if (message->GetName().ToString() == "KeySet") {
+        if (message->GetArgumentList()->GetSize() == 1) {
+            currentKeySet = std::atoi(message->GetArgumentList()->GetString(0).ToString().c_str());
+            DEBUG("BrowserClient::OnProcessMessageReceived: KeySet 0x{:x}", currentKeySet.load());
+        }
+        return true;
     } else if (message->GetName().ToString() == "DestroyApp") {
         // A TV starts the autostart application of the channel again, unless
         // the autostart application destroys itself.
@@ -243,6 +250,9 @@ void BrowserClient::loadUrl(CefRefPtr<CefBrowser> browser, const std::string& ur
 
     std::string reason = "BrowserClient::loadUrl";
     transcoderClient->Stop(streamId, reason);
+
+    // the new page starts with the default keyset
+    currentKeySet = KEYSET_DEFAULT;
 
     // load url
     browser->GetMainFrame()->LoadURL(url);
