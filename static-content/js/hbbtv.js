@@ -191,8 +191,15 @@
                 let args = (app[3] ? app[3] : "");
 
                 window.cefStartApp(channelId, appid, args);
+                return new Application(document);
             }
+        } else if (/^https?:\/\//i.test(uri)) {
+            // broadcast independent application
+            window.cefLoadUrl(uri);
+            return new Application(document);
         }
+
+        return null;
     };
 
     Application.prototype.destroyApplication = function () {
