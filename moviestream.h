@@ -35,6 +35,9 @@ public:
 
 private:
     size_t offset;
+    size_t range_start;
+    size_t range_end;      // inclusive
+    bool is_range_request;
     size_t download_total;
     std::string download_data;
     TranscoderClient *transcoderClient;
