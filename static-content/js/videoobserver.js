@@ -73,6 +73,38 @@ window.promoteVideoSize = (node) => {
     }
 }
 
+async function checkMpd(nodedata) {
+    let mpdStart = 0;
+
+    if (nodedata.endsWith(".mpd") || nodedata.indexOf("hbbtv.zdf.de/zdfm3/dyn/mpd.php") !== -1) {
+        // A VOD manifest has no timeShiftBufferDepth and often no Period@start.
+        // Any problem here must not prevent the start of the video.
+        try {
+            const mpd = await fetch(nodedata);
+            const data = await mpd.text();
+
+            let parser = new DOMParser();
+            let xmlDoc = parser.parseFromString(data, "text/xml");
+
+            let timeShiftBufferDepth = xmlDoc.documentElement.getAttribute("timeShiftBufferDepth");
+            let period = xmlDoc.getElementsByTagName("Period")[0];
+            let periodStart = period ? period.getAttribute("start") : null;
+
+            if (timeShiftBufferDepth) {
+                let startTime = periodStart ? durationToSeconds(parseWithTinyDuration(periodStart)) : 0;
+                mpdStart = durationToSeconds(parseWithTinyDuration(timeShiftBufferDepth)) - startTime;
+            }
+
+            console.log("timeShiftBufferDepth: " + timeShiftBufferDepth + ", periodStart: " + periodStart + ", mpdStart: " + mpdStart);
+        } catch (e) {
+            console.log("checkMpd: unable to evaluate " + nodedata + ": " + e);
+            mpdStart = 0;
+        }
+    }
+
+    return Math.max(0, Math.floor(mpdStart));
+}
+
 function addNodeFunctions(node) {
     node.bindToCurrentChannel = node.bindToCurrentChannel || function() {
         console.log('Node bindToCurrentChannel');
@@ -134,8 +166,33 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
     video.style = 'top:0px; left:0px; width:100%; height:100%;';
     video.preload = "auto";
 
+    // restart the stream after stop(), like a TV restarts the current data
+    function restartAfterStop() {
+        node._vdrStopped = false;
+        node.playState = PLAY_STATES.connecting;
+        if (node.onPlayStateChange) {
+            node.onPlayStateChange(node.playState);
+        }
+
+        (async () => {
+            let mpdStart = await checkMpd(originalUrl);
+            let newUrl = window.cefStreamVideo(originalUrl, document.cookie, document.referrer, navigator.userAgent, mpdStart);
+            video.src = newUrl;
+            video.load();
+            video.play().catch((e) => {
+                console.error(e.message);
+            });
+        })();
+    }
+
     node.play = node.play || function (speed) {
         console.log("Node Play Speed " + speed);
+        if (speed > 0 && node._vdrStopped) {
+            node.speed = speed;
+            restartAfterStop();
+            return true;
+        }
+
         if (speed === 0) {
             setTimeout(() => {
                 console.log("window.cefPauseVideo()");
@@ -191,18 +248,27 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
         console.log("window.cefStopVideo()");
         window.cefStopVideo();
 
+        // The events of the internal video (pause, emptied, ...) must not change
+        // the state anymore. Don't replace any element: the application keeps its
+        // reference to this object, and a replaced object would be detected as new
+        // video by the MutationSummary.
+        node._vdrStopped = true;
+
         video.pause();
         video.removeAttribute('src'); // empty source
         video.load();
 
-        video.currentTime = 0;
         node.playState = PLAY_STATES.stopped;
         node.playPosition = 0;
         node.speed = 0;
 
-        // remove all event listeners
-        document.getElementsByTagName('video')[0].outerHTML = document.getElementsByTagName('video')[0].outerHTML;
-        node.outerHTML = node.outerHTML;
+        if (node.onPlayStateChange) {
+            node.onPlayStateChange(node.playState);
+        } else {
+            let playerEvent = new Event('PlayStateChange');
+            playerEvent.state = node.playState;
+            node.dispatchEvent(playerEvent);
+        }
 
         window.stop_video_quirk();
         return true;
@@ -223,6 +289,10 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
     video && video.addEventListener && video.addEventListener('playing', function () {
         console.log("Video event playing");
 
+        if (node._vdrStopped) {
+            return;
+        }
+
         node.playState = PLAY_STATES.playing;
         if (node.onPlayStateChange) {
             node.onPlayStateChange(node.playState);
@@ -239,6 +309,10 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
     video && video.addEventListener && video.addEventListener('pause', function () {
         console.log("Video event pause");
 
+        if (node._vdrStopped) {
+            return;
+        }
+
         node.playState = PLAY_STATES.paused;
         if (node.onPlayStateChange) {
             node.onPlayStateChange(node.playState);
@@ -251,6 +325,10 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
 
     video && video.addEventListener && video.addEventListener('ended', function () {
         console.log("Video event ended");
+
+        if (node._vdrStopped) {
+            return;
+        }
 
         node.playState = PLAY_STATES.finished;
         if (node.onPlayStateChange) {
@@ -267,6 +345,10 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
 
     video && video.addEventListener && video.addEventListener('error', function (e) {
         console.log("Video event error");
+
+        if (node._vdrStopped) {
+            return;
+        }
 
         node.playState = PLAY_STATES.error;
         if (node.onPlayStateChange) {
@@ -585,38 +667,6 @@ function checkAddedObjectNode(summaries) {
 }
 
 function checkSingleObjectNode(node) {
-    async function checkMpd(nodedata) {
-        let mpdStart = 0;
-
-        if (nodedata.endsWith(".mpd") || nodedata.indexOf("hbbtv.zdf.de/zdfm3/dyn/mpd.php") !== -1) {
-            // A VOD manifest has no timeShiftBufferDepth and often no Period@start.
-            // Any problem here must not prevent the start of the video.
-            try {
-                const mpd = await fetch(nodedata);
-                const data = await mpd.text();
-
-                let parser = new DOMParser();
-                let xmlDoc = parser.parseFromString(data, "text/xml");
-
-                let timeShiftBufferDepth = xmlDoc.documentElement.getAttribute("timeShiftBufferDepth");
-                let period = xmlDoc.getElementsByTagName("Period")[0];
-                let periodStart = period ? period.getAttribute("start") : null;
-
-                if (timeShiftBufferDepth) {
-                    let startTime = periodStart ? durationToSeconds(parseWithTinyDuration(periodStart)) : 0;
-                    mpdStart = durationToSeconds(parseWithTinyDuration(timeShiftBufferDepth)) - startTime;
-                }
-
-                console.log("timeShiftBufferDepth: " + timeShiftBufferDepth + ", periodStart: " + periodStart + ", mpdStart: " + mpdStart);
-            } catch (e) {
-                console.log("checkMpd: unable to evaluate " + nodedata + ": " + e);
-                mpdStart = 0;
-            }
-        }
-
-        return Math.max(0, Math.floor(mpdStart));
-    }
-
     if (node.type === 'video/broadcast') {
         console.log("Found TV on node: " + node);
         window.addVideoOverlay(node);
