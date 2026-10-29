@@ -154,7 +154,9 @@ function addNodeFunctions(node) {
             return e.listener === listener && e.eventName === eventName && e.url === url;
         });
 
-        window.HBBTV_POLYFILL_NS.streamEventListeners.splice(idx, 1);
+        if (idx >= 0) {
+            window.HBBTV_POLYFILL_NS.streamEventListeners.splice(idx, 1);
+        }
     };
 }
 
