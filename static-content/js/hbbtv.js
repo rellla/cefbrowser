@@ -205,11 +205,16 @@
     Application.prototype.destroyApplication = function () {
         delete this._applicationUrl;
 
-        // destroy the whole page and set a flag
-        document.body.innerText = "";
-        document.head.innerText = "";
-
-        // signalCef("DESTROY_APP");
+        // Like a TV: the application ends and the autostart application of the
+        // current channel is started again (it shows usually only the red button hint).
+        let channel = window.HBBTV_POLYFILL_NS.currentChannel;
+        if (window.cefDestroyApp) {
+            window.cefDestroyApp(channel && channel.channelId ? channel.channelId : "");
+        } else {
+            // destroy the whole page
+            document.body.innerText = "";
+            document.head.innerText = "";
+        }
     };
 
     window.Application = Application;

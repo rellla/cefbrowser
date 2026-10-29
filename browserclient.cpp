@@ -165,6 +165,32 @@ bool BrowserClient::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefR
         } else {
             ERROR("BrowserClient::OnProcessMessageReceived: RedButton without channelId");
         }
+    } else if (message->GetName().ToString() == "DestroyApp") {
+        // A TV starts the autostart application of the channel again, unless
+        // the autostart application destroys itself.
+        std::string channelId;
+        if (message->GetArgumentList()->GetSize() == 1) {
+            channelId = message->GetArgumentList()->GetString(0).ToString();
+        }
+
+        std::string url = channelId.empty() ? "" : database->getRedButtonUrl(channelId);
+        std::string current = browser->GetMainFrame() ? browser->GetMainFrame()->GetURL().ToString() : "";
+
+        if (url.empty() || current.rfind(url, 0) == 0) {
+            DEBUG("BrowserClient::OnProcessMessageReceived: DestroyApp -> blank page");
+            loadUrl(browser, BLANK_PAGE);
+        } else {
+            DEBUG("BrowserClient::OnProcessMessageReceived: DestroyApp -> autostart application {}", url);
+
+            std::string channel = database->getChannel(channelId);
+            std::ofstream _dynamic;
+            _dynamic.open (bParam.static_path + "/js/_dynamic.js", std::ios_base::trunc);
+            _dynamic << "window.HBBTV_POLYFILL_NS = window.HBBTV_POLYFILL_NS || {}; window.HBBTV_POLYFILL_NS.currentChannel = " << channel << std::endl;
+            _dynamic.close();
+
+            loadUrl(browser, url);
+        }
+        return true;
     } else if (message->GetName().ToString() == "LoadUrl") {
         if (message->GetArgumentList()->GetSize() == 1) {
             std::string url = message->GetArgumentList()->GetString(0).ToString();

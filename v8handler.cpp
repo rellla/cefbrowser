@@ -259,6 +259,17 @@ bool V8Handler::Execute(const CefString &name, CefRefPtr<CefV8Value> object, con
 
         retval = CefV8Value::CreateBool(true);
         return true;
+    } else if (name == "DestroyApp") {
+        std::string channelId;
+        if (!arguments.empty() && arguments.at(0)->IsString()) {
+            channelId = arguments.at(0)->GetStringValue().ToString();
+        }
+
+        DEBUG("V8Handler::Execute DestroyApp ChannelId {}", channelId);
+        sendMessageToProcess("DestroyApp", channelId);
+
+        retval = CefV8Value::CreateBool(true);
+        return true;
     } else if (name == "LoadUrl") {
         if (!arguments.empty()) {
             const auto& param = arguments.at(0);
