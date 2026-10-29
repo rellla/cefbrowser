@@ -1,13 +1,15 @@
 #include <chrono>
 #include <thread>
+#include <atomic>
 
 #include "v8handler.h"
 #include "logger.h"
 #include "browserclient.h"
 
-bool startVideo;
-bool videoReset = false;
-bool stopVideoThreadRunning = false;
+// used by the javascript thread and the stop thread
+std::atomic<bool> startVideo(false);
+std::atomic<bool> videoReset(false);
+std::atomic<bool> stopVideoThreadRunning(false);
 
 std::string videoInfo;
 std::string oldVideoInfo;
@@ -165,11 +167,15 @@ bool V8Handler::Execute(const CefString &name, CefRefPtr<CefV8Value> object, con
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
             }
 
-            TRACE("VideoReset: {}", videoReset);
+            TRACE("VideoReset: {}", videoReset.load());
 
             if (!videoReset) {
                 vdrClient->StartVideo(videoInfo);
             }
+
+            // the reset applies to this video only. The next video without a
+            // stop in between needs its own StartVideo.
+            videoReset = false;
         }
 
         std::string newVideoUrl = "http://localhost/movie/transparent-video-" + bParam.browserIp + "_" + std::to_string(bParam.browserPort) + "-" + std::to_string(now) + ".webm";
