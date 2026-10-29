@@ -589,21 +589,32 @@ function checkSingleObjectNode(node) {
         let mpdStart = 0;
 
         if (nodedata.endsWith(".mpd") || nodedata.indexOf("hbbtv.zdf.de/zdfm3/dyn/mpd.php") !== -1) {
-            const mpd = await fetch(nodedata);
-            const data = await mpd.text();
+            // A VOD manifest has no timeShiftBufferDepth and often no Period@start.
+            // Any problem here must not prevent the start of the video.
+            try {
+                const mpd = await fetch(nodedata);
+                const data = await mpd.text();
 
-            let parser = new DOMParser();
-            let xmlDoc = parser.parseFromString(data, "text/xml");
+                let parser = new DOMParser();
+                let xmlDoc = parser.parseFromString(data, "text/xml");
 
-            let timeShiftBufferDepth = xmlDoc.documentElement.getAttribute("timeShiftBufferDepth");
-            let periodStart = xmlDoc.getElementsByTagName("Period")[0].getAttribute("start");
+                let timeShiftBufferDepth = xmlDoc.documentElement.getAttribute("timeShiftBufferDepth");
+                let period = xmlDoc.getElementsByTagName("Period")[0];
+                let periodStart = period ? period.getAttribute("start") : null;
 
-            let startTime = durationToSeconds(parseWithTinyDuration(periodStart));
-            mpdStart = durationToSeconds(parseWithTinyDuration(timeShiftBufferDepth)) - startTime;
-            console.log("timeShiftBufferDepth: " + timeShiftBufferDepth + ", periodStart: " + periodStart + ", mpdStart: " + mpdStart);
+                if (timeShiftBufferDepth) {
+                    let startTime = periodStart ? durationToSeconds(parseWithTinyDuration(periodStart)) : 0;
+                    mpdStart = durationToSeconds(parseWithTinyDuration(timeShiftBufferDepth)) - startTime;
+                }
+
+                console.log("timeShiftBufferDepth: " + timeShiftBufferDepth + ", periodStart: " + periodStart + ", mpdStart: " + mpdStart);
+            } catch (e) {
+                console.log("checkMpd: unable to evaluate " + nodedata + ": " + e);
+                mpdStart = 0;
+            }
         }
 
-        return mpdStart;
+        return Math.max(0, Math.floor(mpdStart));
     }
 
     if (node.type === 'video/broadcast') {
