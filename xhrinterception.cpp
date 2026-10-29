@@ -42,35 +42,30 @@ void XhrInterception::modifyResponse() {
             dataJson = j_flat.unflatten();
         }
 
+        // Only look at existing keys: operator[] inserts missing keys as null (the
+        // application then gets e.g. "data": null) and throws if the json is no object.
+        auto isObject = [](const nlohmann::ordered_json& j, const char* key) {
+            return j.is_object() && j.contains(key) && j[key].is_object();
+        };
+
         if (cprResponse.url.str().find("-hbbtv.zdf.de/ds/configuration") != std::string::npos) {
-            if (dataJson.find("dash") != dataJson.end()) {
+            if (dataJson.is_object() && dataJson.contains("dash")) {
                 dataJson["dash"] = false;
             }
         } else if (cprResponse.url.str().find("hbbtv.zdf.de") != std::string::npos) {
             // Version 1
-            if (dataJson["data"] != nullptr) {
+            if (isObject(dataJson, "data")) {
                 dataJson["data"].erase("ageControl");
             }
 
             // Version 2
-            if (dataJson["fsk"]["age"] != nullptr) {
-                dataJson["fsk"].erase("age");
-            }
-
-            if (dataJson["fsk"] != nullptr) {
+            if (dataJson.is_object() && dataJson.contains("fsk")) {
                 dataJson.erase("fsk");
             }
 
             // Version 3
-            if (dataJson.find("videoMetaData") != dataJson.end() && dataJson["videoMetaData"] != nullptr) {
+            if (isObject(dataJson, "videoMetaData")) {
                 dataJson["videoMetaData"].erase("fsk");
-            }
-        } else if (cprResponse.url.str().find("tv.ardmediathek.de/dyn/get?id=video") != std::string::npos) {
-            // Version 1
-            if (dataJson["video"]["meta"]["maturityContentRating"] != nullptr) {
-                // dataJson["video"]["meta"].erase("maturityContentRating");
-                // dataJson["video"]["meta"]["maturityContentRating"]["age"] = "6";
-                // dataJson["video"]["meta"]["maturityContentRating"]["isBlocked"] = false;
             }
         }
     } else {
