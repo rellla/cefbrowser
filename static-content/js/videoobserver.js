@@ -438,6 +438,14 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
 function addVideoNodeTypeVideo(node, url) {
     let video = node;
 
+    // ZDF reuses the video element for the next video. Register the listeners
+    // only once, they use the current url.
+    node._vdrUrl = url;
+    if (node._vdrListeners) {
+        return;
+    }
+    node._vdrListeners = true;
+
     // check if source element exists
     let videoSrc = video;
     let videoSrcElementArr = video.getElementsByTagName('source');
@@ -509,11 +517,12 @@ function addVideoNodeTypeVideo(node, url) {
 
     video && video.addEventListener && video.addEventListener('play', function () {
         console.log("video tag play: " + video.playState);
-        if (url !== videoSrc.src) {
+        if (node._vdrUrl !== videoSrc.src) {
             if (videoSrc.src.includes("_muted_onl")) {
                 videoSrc.src = "";
             } else {
-                videoSrc.src = url;
+                node._vdrOwnSrc = node._vdrUrl;
+                videoSrc.src = node._vdrUrl;
                 video.type = "video/webm";
                 window.start_video_quirk();
             }
@@ -588,15 +597,16 @@ function addVideoNodeTypeVideo(node, url) {
 
     video && video.addEventListener && video.addEventListener('error', function (e) {
         console.log("error, URL: " + video.src);
-        console.log("error, NEW: " + url);
-        console.log("Identisch: " + video.src === url);
+        console.log("error, NEW: " + node._vdrUrl);
+        console.log("Identisch: " + (video.src === node._vdrUrl));
 
-        if (video.src !== url || video.src.endsWith(".mpd")) {
+        if (video.src !== node._vdrUrl || video.src.endsWith(".mpd")) {
             e.stopPropagation();
         }
 
         if (video.src.endsWith(".mpd")) {
-            videoSrc.src = url;
+            node._vdrOwnSrc = node._vdrUrl;
+            videoSrc.src = node._vdrUrl;
             video.type = "video/webm";
             window.start_video_quirk();
 
@@ -627,6 +637,32 @@ function addVideoNodeTypeVideo(node, url) {
     */
 }
 
+
+// ZDF sets a new src at the existing video element for the next video
+function checkChangedVideoSrc(summary) {
+    if (summary.attributeChanged === undefined || summary.attributeChanged.src === undefined) {
+        return;
+    }
+
+    if (!document.location.toString().includes("hbbtv.zdf.de")) {
+        return;
+    }
+
+    summary.attributeChanged.src.forEach((node) => {
+        if (node.nodeName.toUpperCase() !== 'VIDEO' || !node.src) {
+            return;
+        }
+
+        // ignore the changes done by this script
+        if (node.src === node._vdrOwnSrc || node.src.startsWith("http://localhost/movie/")) {
+            return;
+        }
+
+        console.log("checkChangedVideoSrc: new src " + node.src);
+        node.data = undefined;
+        checkSingleObjectNode(node);
+    });
+}
 
 function checkPositionObjectNode(summary) {
     // collect all nodes
@@ -716,6 +752,7 @@ function checkSingleObjectNode(node) {
                         url = document.location.protocol + url;
                     }
                     node.data = node.src;
+                    node._vdrOwnSrc = url;
                     node.src = url;
                 }
 
@@ -768,6 +805,7 @@ const ms = new MutationSummary({
             console.log(summary);
 
             checkAddedObjectNode(summary);
+            checkChangedVideoSrc(summary);
             checkPositionObjectNode(summary);
         });
     },
@@ -778,6 +816,7 @@ const ms = new MutationSummary({
         },
         {
             element: 'video',
+            elementAttributes: 'src',
         },
     ]
 });
