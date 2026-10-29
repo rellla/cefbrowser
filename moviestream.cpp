@@ -26,11 +26,14 @@ bool MovieStream::Open(CefRefPtr<CefRequest> request, bool& handle_request, CefR
         input.filename = request->GetURL().ToString().c_str() + strlen("http://localhost/movie/");
     }
 
-    transcoderClient->GetVideo(download_data, input);
+    download_data.clear();
+    if (!transcoderClient->GetVideo(download_data, input)) {
+        ERROR("MovieStream: video {} not available", input.filename);
+        download_data.clear();
+    }
     download_total = download_data.length();
 
-    callback->Continue();
-
+    // handled immediately, the callback must not be used in this case
     handle_request = true;
     return true;
 }
@@ -55,6 +58,13 @@ void MovieStream::GetResponseHeaders(CefRefPtr<CefResponse> response, int64_t &r
     TRACE("MovieStream::GetResponseHeaders");
 
     CefResponse::HeaderMap responseHeader;
+
+    if (download_total == 0) {
+        response->SetStatus(404);
+        response->SetStatusText("Not Found");
+        response_length = 0;
+        return;
+    }
 
     response->SetStatus(206);
     response->SetStatusText("Partial Content");
