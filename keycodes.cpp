@@ -12,11 +12,11 @@ std::unordered_map<std::string, int> keyCodes = {
         {"VK_GREEN",     0x0194},    // green
         {"VK_YELLOW",    0x0195},    // yellow
         {"VK_BLUE",      0x0196},    // blue
-        {"VK_PLAY",      0x0050},    // play
-        {"VK_PAUSE",     0x0051},    // pause
-        {"VK_STOP",      0x0053},    // stop
-        {"VK_FAST_FWD",  0x0046},    // fast forward
-        {"VK_REWIND",    0x0052},    // rewind
+        {"VK_PLAY",      0x019F},    // play
+        {"VK_PAUSE",     0x0013},    // pause
+        {"VK_STOP",      0x019D},    // stop
+        {"VK_FAST_FWD",  0x01A1},    // fast forward
+        {"VK_REWIND",    0x019C},    // rewind
         {"VK_PAGE_UP",   0x0021},    // page up, vk_Prior
         {"VK_PAGE_DOWN", 0x0022},    // page down, vk_Next
         {"VK_0",         0x0030},    // 0
