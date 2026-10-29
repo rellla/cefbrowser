@@ -77,39 +77,22 @@
     window.VK_9 = (typeof window.VK_9 !== 'undefined' ? window.VK_9 : 0x39);
 
     window.cefKeyPress = function(keyCode) {
-        // create and dispatch the event (keydown)
-        let keyDownEvent = new KeyboardEvent("keydown", {
-            bubbles: true,
-            cancelable: true,
-        });
+        // Dispatch at the focused element like a real key event, so that listeners at
+        // the body or any other element see the key, not only listeners at document/window.
+        let target = document.activeElement || document.body || document;
+        let code = window[keyCode];
 
-        delete keyDownEvent.keyCode;
-        Object.defineProperty(keyDownEvent, "keyCode", {"value": window[keyCode]});
-        Object.defineProperty(keyDownEvent, "detail", {"value": {hbbInternal: true}});
+        for (const type of ["keydown", "keypress", "keyup"]) {
+            let event = new KeyboardEvent(type, {
+                bubbles: true,
+                cancelable: true,
+            });
 
-        document.dispatchEvent(keyDownEvent);
+            Object.defineProperty(event, "keyCode", {"value": code});
+            Object.defineProperty(event, "which", {"value": code});
+            Object.defineProperty(event, "detail", {"value": {hbbInternal: true}});
 
-        // create and dispatch the event (keypress)
-        let keypressEvent = new KeyboardEvent("keypress", {
-            bubbles: true,
-            cancelable: true,
-        });
-        delete keypressEvent.keyCode;
-        Object.defineProperty(keypressEvent, "keyCode", {"value": window[keyCode]});
-        Object.defineProperty(keypressEvent, "detail", {"value": {hbbInternal: true}});
-
-        document.dispatchEvent(keypressEvent);
-
-        // create and dispatch the event (keyup)
-        let keyUpEvent = new KeyboardEvent("keyup", {
-            bubbles: true,
-            cancelable: true,
-        });
-
-        delete keyUpEvent.keyCode;
-        Object.defineProperty(keyUpEvent, "keyCode", {"value": window[keyCode]});
-        Object.defineProperty(keyUpEvent, "detail", {"value": {hbbInternal: true}});
-
-        document.dispatchEvent(keyUpEvent);
+            target.dispatchEvent(event);
+        }
     }
 })();
