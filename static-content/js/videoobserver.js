@@ -395,9 +395,9 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
         console.log("Event seek video " + video.currentTime + ", node " + node.playPosition);
 
         var pos = Math.floor(video.currentTime * 1000);
+        node.playPosition = pos;
         if (node.onPlayPositionChanged) {
-            node.playPosition = pos;
-            node.PlayPositionChanged(pos);
+            node.onPlayPositionChanged(pos);
         } else {
             var playerEvent = new Event('PlayPositionChanged');
             playerEvent.position = pos;
