@@ -658,7 +658,11 @@ function checkSingleObjectNode(node) {
                 // the final url is base64 encoded, to prevent starting a dash player
                 if (node.src.includes("http://localhost/encoded/")) {
                     let url = node.src.substring(node.src.indexOf("http://localhost/encoded/") + "http://localhost/encoded/".length);
-                    url = "http:" + atob(url.substring(0, url.length - 4));
+                    url = atob(url.substring(0, url.length - 4));
+                    if (url.startsWith("//")) {
+                        // scheme relative url
+                        url = document.location.protocol + url;
+                    }
                     node.data = node.src;
                     node.src = url;
                 }
