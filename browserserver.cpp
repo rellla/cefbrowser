@@ -321,7 +321,10 @@ bool BrowserServer::StopVideo(const StopVideoType &input) {
 }
 
 bool BrowserServer::PlayerStatus(const PlayerStatusType &input) {
-    // not supported yet
+    GET_BROWSER(browser, false)
+
+    executeJavaScriptOnUi(browser, "window._vdrPlayerStatus && window._vdrPlayerStatus(" +
+                                   std::to_string(input.position) + "," + std::to_string(input.state) + ");");
     return true;
 }
 

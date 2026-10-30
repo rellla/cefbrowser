@@ -216,6 +216,52 @@ function isNewObjectData(node) {
     return !!data && data !== "http://gibbet.nix" && !data.startsWith("http://localhost/movie/");
 }
 
+// Playback status reported by VDR: the position of the displayed picture, buffering
+// and the end of the video. The transparent video in the browser runs independently.
+function VdrStatus() {
+    this.base = 0;            // position of the (re)start in ms
+    this.elapsed = -1;        // ms since the (re)start, reported by VDR, -1 = unknown
+    this.waitReset = false;   // after a seek/resume, ignore the status of the old stream
+    this.state = -1;
+    this.active = false;
+}
+
+VdrStatus.prototype.restart = function (positionMs) {
+    this.base = positionMs;
+    this.waitReset = this.elapsed >= 0;
+};
+
+// returns false if the status belongs to the previous stream
+VdrStatus.prototype.update = function (position, state) {
+    if (this.waitReset) {
+        if (position >= 0 && position >= this.elapsed) {
+            this.elapsed = position;
+            return false;
+        }
+        this.waitReset = false;
+    }
+
+    this.elapsed = position;
+    this.active = true;
+    return true;
+};
+
+VdrStatus.prototype.position = function () {
+    return (this.active && this.elapsed >= 0 && !this.waitReset) ? this.base + this.elapsed : -1;
+};
+
+// the media element which gets the status of VDR
+window._vdrActiveMedia = null;
+window._vdrPlayerStatus = function (position, state) {
+    if (window._vdrActiveMedia) {
+        window._vdrActiveMedia(position, state);
+    }
+};
+
+const VDR_STATE_PLAYING = 0;
+const VDR_STATE_BUFFERING = 2;
+const VDR_STATE_ENDED = 3;
+
 function addVideoNodeTypeObject(node, url, originalUrl) {
     // The application may set a new data at the same object for the next video.
     // Replace the functions and ignore the events of the previous internal video.
@@ -252,6 +298,49 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
     }
 
     let video = document.createElement('video');
+    let vdr = new VdrStatus();
+    node._vdrEnded = false;
+
+    function onVdrStatus(position, state) {
+        if (node._vdrStopped || video._vdrDead || !vdr.update(position, state)) {
+            return;
+        }
+
+        let pos = vdr.position();
+        if (pos >= 0) {
+            node.playPosition = pos;
+            if (typeof node.onPlayPositionChanged === 'function') {
+                node.onPlayPositionChanged(pos);
+            }
+            let event = new Event('PlayPositionChanged');
+            event.position = pos;
+            node.dispatchEvent(event);
+        }
+
+        if (state === vdr.state) {
+            return;
+        }
+        vdr.state = state;
+
+        if (state === VDR_STATE_ENDED && !node._vdrEnded) {
+            node._vdrEnded = true;
+            if (!video.paused) {
+                video.pause();
+            }
+            node.playState = PLAY_STATES.finished;
+            notifyPlayState();
+            window.stop_video_quirk();
+        } else if (state === VDR_STATE_BUFFERING && node.playState === PLAY_STATES.playing) {
+            node.playState = PLAY_STATES.buffering;
+            notifyPlayState();
+        } else if (state === VDR_STATE_PLAYING && node.playState === PLAY_STATES.buffering) {
+            node.playState = PLAY_STATES.playing;
+            notifyPlayState();
+        }
+    }
+
+    window._vdrActiveMedia = onVdrStatus;
+
     video.type = "video/webm";
     video.src = url;
     // video.autoplay = false;
@@ -261,6 +350,9 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
     // restart the stream after stop(), like a TV restarts the current data
     function restartAfterStop() {
         node._vdrStopped = false;
+        node._vdrEnded = false;
+        vdr = new VdrStatus();
+        window._vdrActiveMedia = onVdrStatus;
         node.playState = PLAY_STATES.connecting;
         notifyPlayState();
 
@@ -297,6 +389,7 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
                 if (node.playState === PLAY_STATES.paused) {
                     console.log("window.cefResumeVideo()");
                     window.cefResumeVideo(String(video.currentTime));
+                    vdr.restart(Math.floor(video.currentTime * 1000));
                 }
 
                 node.speed = speed;
@@ -343,6 +436,9 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
         // reference to this object, and a replaced object would be detected as new
         // video by the MutationSummary.
         node._vdrStopped = true;
+        if (window._vdrActiveMedia === onVdrStatus) {
+            window._vdrActiveMedia = null;
+        }
 
         video.pause();
         video.removeAttribute('src'); // empty source
@@ -363,6 +459,8 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
 
         console.log("window.cefSeekVideo()");
         window.cefSeekVideo(String(posInMs / 1000));
+        vdr.restart(posInMs);
+        node._vdrEnded = false;
 
         video.currentTime = posInMs / 1000;
         node.playPosition = posInMs;
@@ -387,7 +485,12 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
     video && video.addEventListener && video.addEventListener('pause', function () {
         console.log("Video event pause");
 
-        if (node._vdrStopped || video._vdrDead) {
+        if (node._vdrStopped || video._vdrDead || node._vdrEnded) {
+            return;
+        }
+
+        // the transparent video ended before VDR has shown the end
+        if (vdr.active && video.ended) {
             return;
         }
 
@@ -398,7 +501,12 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
     video && video.addEventListener && video.addEventListener('ended', function () {
         console.log("Video event ended");
 
-        if (node._vdrStopped || video._vdrDead) {
+        if (node._vdrStopped || video._vdrDead || node._vdrEnded) {
+            return;
+        }
+
+        // VDR reports the real end of the video
+        if (vdr.active) {
             return;
         }
 
@@ -432,12 +540,16 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
         // console.log("Event timeupdate video " + video.currentTime + ", node " + node.playPosition);
         // console.log("Duration: " + node.duration + ", time: " + video.currentTime + ", left " + (node.duration - video.currentTime));
 
-        var pos = Math.floor(video.currentTime * 1000);
-        node.playPostion = pos;
-        if (node.PlayPositionChanged) {
-            node.PlayPositionChanged(pos);
+        // the position reported by VDR is used, if available
+        if (vdr.position() >= 0) {
+            return;
         }
+
+        var pos = Math.floor(video.currentTime * 1000);
         node.playPosition = pos;
+        if (typeof node.onPlayPositionChanged === 'function') {
+            node.onPlayPositionChanged(pos);
+        }
 
         var playerEvent = new Event('PlayPositionChanged');
         playerEvent.position = pos;
@@ -495,8 +607,67 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
     }, 0);
 }
 
+function _vdrDispatch(video, type) {
+    let event = new Event(type);
+    event._vdrSynthetic = true;
+    video.dispatchEvent(event);
+}
+
+// status of VDR for a HTML5 video element
+function html5VdrStatus(video, position, state) {
+    let vdr = video._vdrStatus;
+    if (!vdr || !vdr.update(position, state)) {
+        return;
+    }
+
+    // the transparent video may end before the real video, keep the time running
+    if (video.ended && state === VDR_STATE_PLAYING) {
+        _vdrDispatch(video, 'timeupdate');
+    }
+
+    if (state === vdr.state) {
+        return;
+    }
+    let previous = vdr.state;
+    vdr.state = state;
+
+    if (state === VDR_STATE_ENDED && !video._vdrEnded) {
+        video._vdrEnded = true;
+        if (!video.paused) {
+            video.pause();
+        }
+        _vdrDispatch(video, 'ended');
+        window.stop_video_quirk();
+    } else if (state === VDR_STATE_BUFFERING) {
+        _vdrDispatch(video, 'waiting');
+    } else if (state === VDR_STATE_PLAYING && previous === VDR_STATE_BUFFERING) {
+        _vdrDispatch(video, 'playing');
+    }
+}
+
+// The transparent video ends after its own duration, maybe before VDR has shown the
+// end of the real video. Hide its 'pause' and 'ended' events from the application
+// (capture phase at window runs before all listeners at the element).
+['pause', 'ended'].forEach((type) => {
+    window.addEventListener(type, (e) => {
+        let t = e.target;
+        if (e._vdrSynthetic || !t || !t._vdrStatus || t._vdrEnded) {
+            return;
+        }
+
+        if (t._vdrStatus.active && t.ended) {
+            e.stopImmediatePropagation();
+        }
+    }, true);
+});
+
 function addVideoNodeTypeVideo(node, url) {
     let video = node;
+
+    // a new video, a new status
+    node._vdrStatus = new VdrStatus();
+    node._vdrEnded = false;
+    window._vdrActiveMedia = (position, state) => html5VdrStatus(node, position, state);
 
     // ZDF reuses the video element for the next video. Register the listeners
     // only once, they use the current url.
@@ -506,6 +677,23 @@ function addVideoNodeTypeVideo(node, url) {
     }
     node._vdrListeners = true;
     window.addHtml5TrackFunctions(node);
+
+    // currentTime is the position of the picture displayed by VDR, if known
+    const currentTime = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
+    Object.defineProperty(node, 'currentTime', {
+        configurable: true,
+        get: function () {
+            let pos = node._vdrStatus ? node._vdrStatus.position() : -1;
+            return pos >= 0 ? pos / 1000 : currentTime.get.call(node);
+        },
+        set: function (value) {
+            if (node._vdrStatus) {
+                node._vdrStatus.restart(value * 1000);
+                node._vdrEnded = false;
+            }
+            currentTime.set.call(node, value);
+        }
+    });
 
     // check if source element exists
     let videoSrc = video;
@@ -636,11 +824,17 @@ function addVideoNodeTypeVideo(node, url) {
     }, false);
 
 
-    video && video.addEventListener && video.addEventListener('playing', function () {
+    video && video.addEventListener && video.addEventListener('playing', function (e) {
         console.log("video tag playing: " + video.playState);
+        if (e._vdrSynthetic) {
+            return;
+        }
+
         if (video.playState === PLAY_STATES.paused) {
+            let position = video.currentTime;
             console.log("window.cefResumeVideo()");
-            window.cefResumeVideo(String(video.currentTime));
+            window.cefResumeVideo(String(position));
+            video._vdrStatus.restart(position * 1000);
         } else {
             console.log("window.cefUnfreezeVideo()");
             window.cefUnfreezeDevice();
