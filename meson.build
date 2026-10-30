@@ -163,10 +163,12 @@ if get_option('vdrsternelec')
     install_subdir('static-content/css', install_dir : 'cefbrowser')
     install_subdir('static-content/database', install_dir : 'cefbrowser')
     install_subdir('static-content/application', install_dir : 'cefbrowser')
+    install_subdir('static-content/fonts', install_dir : 'cefbrowser')
 else
     install_subdir('static-content/js', install_dir : meson.current_build_dir() + '/Release')
     install_subdir('static-content/css', install_dir : meson.current_build_dir() + '/Release')
     install_subdir('static-content/database', install_dir : meson.current_build_dir() + '/Release')
     install_subdir('static-content/application', install_dir : meson.current_build_dir() + '/Release')
+    install_subdir('static-content/fonts', install_dir : meson.current_build_dir() + '/Release')
 endif
 

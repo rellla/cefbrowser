@@ -1,6 +1,8 @@
 #include <thread>
 #include <csignal>
 #include <getopt.h>
+#include <unistd.h>
+#include <cstdlib>
 #include "mainapp.h"
 #include "logger.h"
 #include "mini/ini.h"
@@ -276,6 +278,15 @@ int main(int argc, char *argv[]) {
     zoom_level = 1.0f;
 
     parseCommandLine(argc, argv);
+
+    // Use an own font configuration, the bundled fontconfig of libcef may not understand
+    // the system configuration. Set before the subprocesses are started, they inherit it.
+    if (getenv("FONTCONFIG_FILE") == nullptr) {
+        std::string fontConfig = staticPath + "/fonts/fonts.conf";
+        if (access(fontConfig.c_str(), R_OK) == 0) {
+            setenv("FONTCONFIG_FILE", fontConfig.c_str(), 1);
+        }
+    }
 
     switch (loglevel) {
         case 0:  logger->set_level(spdlog::level::critical); break;
