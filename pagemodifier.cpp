@@ -50,7 +50,7 @@ std::string PageModifier::injectAll(std::string_view source) {
     std::string dyn1 = getDynamicJs();
     result = insertAfterHead(result, dyn1);
 
-    std::string postJs[] = { "video_quirks.js", "videoobserver.js", "hbbtv.js", "initlast.js" };
+    std::string postJs[] = { "video_quirks.js", "avcomponents.js", "videoobserver.js", "hbbtv.js", "initlast.js" };
     for (const auto & file : postJs) {
         std::string insert = "\n<script type=\"text/javascript\" src=\"http://localhost/js/" + file + "\"></script>\n";
         result = insertBeforeEnd(result, insert);

@@ -111,6 +111,7 @@ function addBroadcastFunctions(node) {
         return;
     }
     node._vdrBroadcast = true;
+    window.addComponentFunctions(node, true);
 
     try {
         Object.defineProperty(node, 'currentChannel', {
@@ -233,6 +234,7 @@ function addVideoNodeTypeObject(node, url, originalUrl) {
         node._vdrStopped = false;
     }
     node._vdrManaged = true;
+    window.addComponentFunctions(node, false);
 
     // HbbTV/CEA-2014: call the intrinsic handler and dispatch the DOM event
     function notifyPlayState() {
@@ -503,6 +505,7 @@ function addVideoNodeTypeVideo(node, url) {
         return;
     }
     node._vdrListeners = true;
+    window.addHtml5TrackFunctions(node);
 
     // check if source element exists
     let videoSrc = video;

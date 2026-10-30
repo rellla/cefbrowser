@@ -258,6 +258,9 @@ void BrowserApp::OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFr
 
     CefRefPtr<CefV8Value> audioTrack = CefV8Value::CreateFunction("SelectAudioTrack", handler);
     object->SetValue("cefSelectAudioTrack", audioTrack, V8_PROPERTY_ATTRIBUTE_NONE);
+
+    CefRefPtr<CefV8Value> subtitleTrack = CefV8Value::CreateFunction("SelectSubtitleTrack", handler);
+    object->SetValue("cefSelectSubtitleTrack", subtitleTrack, V8_PROPERTY_ATTRIBUTE_NONE);
 }
 
 void BrowserApp::OnContextReleased(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefV8Context> context) {
