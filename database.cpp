@@ -7,12 +7,12 @@
 bool fatalLogged = false;
 
 std::string insertHbbtvSql = R"(
-                         INSERT INTO HBBTV_URLS (CHANNEL_ID, CHANNEL_NAME, APPLICATION_ID, CONTROL_CODE, APP_NAME, URL_BASE, URL_LOC, URL_EXT)
+                         INSERT OR REPLACE INTO HBBTV_URLS (CHANNEL_ID, CHANNEL_NAME, APPLICATION_ID, CONTROL_CODE, APP_NAME, URL_BASE, URL_LOC, URL_EXT)
                          VALUES (?,?,?,?,?,?,?,?);
                       )";
 
 std::string insertChannelSql = R"(
-                         INSERT INTO CHANNELS (CHANNEL_ID, CHANNEL_JSON)
+                         INSERT OR REPLACE INTO CHANNELS (CHANNEL_ID, CHANNEL_JSON)
                          VALUES (?,?);
                       )";
 
@@ -107,6 +107,10 @@ bool Database::insertHbbtv(std::string json) {
     }
 
     CefRefPtr<CefValue> messageJson = CefParseJSON(json.c_str(), json.length(), JSON_PARSER_ALLOW_TRAILING_COMMAS);
+    if (!messageJson || messageJson->GetType() != VTYPE_DICTIONARY) {
+        ERROR("Database: invalid json {}", json);
+        return false;
+    }
     CefRefPtr<CefDictionaryValue> dict = messageJson->GetDictionary();
 
     CefString channelId = dict->GetString("channelId");
@@ -151,6 +155,10 @@ bool Database::insertChannel(std::string json) {
     }
 
     CefRefPtr<CefValue> messageJson = CefParseJSON(json.c_str(), json.length(), JSON_PARSER_ALLOW_TRAILING_COMMAS);
+    if (!messageJson || messageJson->GetType() != VTYPE_DICTIONARY) {
+        ERROR("Database: invalid json {}", json);
+        return false;
+    }
     CefRefPtr<CefDictionaryValue> dict = messageJson->GetDictionary();
 
     CefString channelId = dict->GetString("channelId");
