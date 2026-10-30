@@ -1,4 +1,5 @@
 #include <iostream>
+#include <functional>
 #include "browserserver.h"
 #include "VdrClient.h"
 #include "mainapp.h"
@@ -7,6 +8,8 @@
 #include "browserclient.h"
 #include "keycodes.h"
 #include "json.hpp"
+#include "include/wrapper/cef_closure_task.h"
+#include "include/base/cef_callback.h"
 
 std::string lastInsertChannel = "";
 std::string streamId;
@@ -19,6 +22,49 @@ std::string streamId;
         ERROR("{}: browser not available", __FUNCTION__); \
         return result; \
     }
+// Most CefBrowser/CefFrame/CefBrowserHost methods must be called on the UI thread
+// (e.g. ExecuteDevToolsMethod), the thrift requests arrive on their own threads.
+// The tasks are executed in the order they are posted.
+static void runOnUiThread(std::function<void()> task) {
+    if (CefCurrentlyOn(TID_UI)) {
+        task();
+    } else {
+        CefPostTask(TID_UI, base::BindOnce([](std::function<void()> t) { t(); }, std::move(task)));
+    }
+}
+
+static void loadUrlOnUi(CefRefPtr<CefBrowser> browser, const std::string& url) {
+    runOnUiThread([browser, url]() {
+        auto frame = browser->GetMainFrame();
+        if (frame != nullptr) {
+            frame->LoadURL(url);
+        } else {
+            ERROR("MainFrame is null");
+        }
+    });
+}
+
+static void executeJavaScriptOnUi(CefRefPtr<CefBrowser> browser, const std::string& script) {
+    runOnUiThread([browser, script]() {
+        auto frame = browser->GetMainFrame();
+        if (frame != nullptr) {
+            frame->ExecuteJavaScript(script, frame->GetURL(), 0);
+        } else {
+            ERROR("MainFrame is null");
+        }
+    });
+}
+
+static void changeUserAgentOnUi(CefRefPtr<CefBrowser> browser, const std::string& agent) {
+    runOnUiThread([browser, agent]() {
+        CefRefPtr<CefClient> client = browser->GetHost()->GetClient();
+        auto c = dynamic_cast<BrowserClient *>(client.get());
+        if (c != nullptr) {
+            c->ChangeUserAgent(browser, agent);
+        }
+    });
+}
+
 BrowserParameter BrowserServer::bParameterServer;
 
 BrowserServer::~BrowserServer() {
@@ -44,11 +90,7 @@ bool BrowserServer::LoadUrl(const LoadUrlType &input) {
         StopVideo(stopType);
     }
 
-    if (browser->GetMainFrame() != nullptr) { // Why is it possible, that MainFrame is null?
-        browser->GetMainFrame()->LoadURL(input.url);
-    } else {
-        ERROR("MainFrame is null");
-    }
+    loadUrlOnUi(browser, input.url);
 
     return true;
 }
@@ -86,19 +128,16 @@ bool BrowserServer::RedButton(const RedButtonType &input) {
 
         CefRefPtr<CefClient> currentClient = browser->GetHost()->GetClient();
         auto c = dynamic_cast<BrowserClient *>(currentClient.get());
+        if (c != nullptr) {
+            c->enableProcessing(true);
+        }
 
         std::string newUserAgent = database->getUserAgent(input.channelId);
         INFO("Use UserAgent {} for {}", newUserAgent, input.channelId);
-        c->ChangeUserAgent(browser, newUserAgent);
-        c->enableProcessing(true);
+        changeUserAgentOnUi(browser, newUserAgent);
 
         // load url
-        if (browser->GetMainFrame() != nullptr) { // Why is it possible, that MainFrame is null?
-            browser->GetMainFrame()->LoadURL(url);
-        } else {
-            ERROR("MainFrame is null");
-            return false;
-        }
+        loadUrlOnUi(browser, url);
     }
 
     return true;
@@ -107,7 +146,7 @@ bool BrowserServer::RedButton(const RedButtonType &input) {
 bool BrowserServer::ReloadOSD() {
     GET_BROWSER(browser, false)
 
-    browser->GetHost()->Invalidate(PET_VIEW);
+    runOnUiThread([browser]() { browser->GetHost()->Invalidate(PET_VIEW); });
     return true;
 }
 
@@ -138,12 +177,11 @@ bool BrowserServer::StartApplication(const StartApplicationType &input) {
 
     CefRefPtr<CefClient> currentClient = browser->GetHost()->GetClient();
     auto c = dynamic_cast<BrowserClient *>(currentClient.get());
-
-    if (!input.appUserAgent.empty()) {
-        c->ChangeUserAgent(browser, input.appUserAgent);
-    } else {
-        c->ChangeUserAgent(browser, "");
+    if (c == nullptr) {
+        return false;
     }
+
+    changeUserAgentOnUi(browser, input.appUserAgent);
 
     std::string url;
 
@@ -167,12 +205,7 @@ bool BrowserServer::StartApplication(const StartApplicationType &input) {
     }
 
     // load url
-    auto frame = browser->GetMainFrame();
-    if (frame == nullptr) {
-        ERROR("MainFrame is null");
-        return false;
-    }
-    frame->LoadURL(url);
+    loadUrlOnUi(browser, url);
 
     return true;
 }
@@ -200,32 +233,31 @@ bool BrowserServer::ProcessKey(const ProcessKeyType &input) {
         // send key event via Javascript
         std::ostringstream stringStream;
         stringStream << "window.cefKeyPress('" << input.key << "');";
-        auto script = stringStream.str();
-        auto frame = browser->GetMainFrame();
-
-        if (frame != nullptr) { // Why is it possiböe, that MainFrame is null?
-            frame->ExecuteJavaScript(script, frame->GetURL(), 0);
-        } else {
-            ERROR("MainFrame is null");
-            return false;
-        }
+        executeJavaScriptOnUi(browser, stringStream.str());
     } else {
         // send key event via code
-        // FIXME: Was ist mit keyCodes, die nicht existieren?
-        int windowsKeyCode = keyCodes[input.key];
-        CefKeyEvent keyEvent;
+        auto code = keyCodes.find(input.key);
+        if (code == keyCodes.end()) {
+            ERROR("Unknown key {}", input.key);
+            return false;
+        }
 
-        keyEvent.windows_key_code = windowsKeyCode;
-        keyEvent.modifiers = 0x00;
+        int windowsKeyCode = code->second;
+        runOnUiThread([browser, windowsKeyCode]() {
+            CefKeyEvent keyEvent;
 
-        keyEvent.type = KEYEVENT_RAWKEYDOWN;
-        browser->GetHost()->SendKeyEvent(keyEvent);
+            keyEvent.windows_key_code = windowsKeyCode;
+            keyEvent.modifiers = 0x00;
 
-        keyEvent.type = KEYEVENT_CHAR;
-        browser->GetHost()->SendKeyEvent(keyEvent);
+            keyEvent.type = KEYEVENT_RAWKEYDOWN;
+            browser->GetHost()->SendKeyEvent(keyEvent);
 
-        keyEvent.type = KEYEVENT_KEYUP;
-        browser->GetHost()->SendKeyEvent(keyEvent);
+            keyEvent.type = KEYEVENT_CHAR;
+            browser->GetHost()->SendKeyEvent(keyEvent);
+
+            keyEvent.type = KEYEVENT_KEYUP;
+            browser->GetHost()->SendKeyEvent(keyEvent);
+        });
     }
 
     return true;
@@ -236,14 +268,8 @@ bool BrowserServer::StreamError(const StreamErrorType &input) {
 
     ERROR("Transcoder returned a stream error: {}", input.reason);
 
-    auto frame = browser->GetMainFrame();
-    if (frame != nullptr) {
-        std::string script1 = "if (document.getElementsByTagName('video')[0]) { document.getElementsByTagName('video')[0].currentTime = document.getElementsByTagName('video')[0].duration; }";
-        frame->ExecuteJavaScript(script1, frame->GetURL(), 0);
-
-        std::string script2 = "window.cefKeyPress('VK_BACK');";
-        frame->ExecuteJavaScript(script2, frame->GetURL(), 0);
-    }
+    executeJavaScriptOnUi(browser, "if (document.getElementsByTagName('video')[0]) { document.getElementsByTagName('video')[0].currentTime = document.getElementsByTagName('video')[0].duration; }");
+    executeJavaScriptOnUi(browser, "window.cefKeyPress('VK_BACK');");
 
     StopVideoType stopType;
     stopType.reason = "stream error";
