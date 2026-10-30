@@ -44,6 +44,7 @@ double zoom_level;
 bool use_dirty_recs;
 
 bool bindAll;
+int remoteDebuggingPort = 0;
 
 CefRefPtr<BrowserApp> app;
 
@@ -106,6 +107,7 @@ void parseCommandLine(int argc, char *argv[]) {
             { "bindall",     optional_argument, nullptr, 'b' },
             { "uagent",      optional_argument, nullptr, 'u' },
             { "browserdb",   optional_argument, nullptr, 'd' },
+            { "remotedebug", required_argument, nullptr, 'r' },
             { nullptr }
     };
 
@@ -122,7 +124,7 @@ void parseCommandLine(int argc, char *argv[]) {
     staticPath = getexepath();
     staticPath = staticPath.substr(0, staticPath.find_last_of('/'));
 
-    while ((c = getopt_long(argc, argv, "qc:l:z:fp:s:bu:d:a:", long_options, &option_index)) != -1)
+    while ((c = getopt_long(argc, argv, "qc:l:z:fp:s:bu:d:a:r:", long_options, &option_index)) != -1)
     {
         switch (c)
         {
@@ -196,6 +198,10 @@ void parseCommandLine(int argc, char *argv[]) {
 
             case 'a':
                 cachePath = optarg;
+                break;
+
+            case 'r':
+                remoteDebuggingPort = atoi(optarg);
                 break;
 
             default:
@@ -337,7 +343,8 @@ int main(int argc, char *argv[]) {
     CefSettings settings;
     settings.windowless_rendering_enabled = true;
     settings.no_sandbox = true;
-    settings.remote_debugging_port = 9222;
+    // remote debugging (DevTools) only on request, it costs memory and opens a port
+    settings.remote_debugging_port = remoteDebuggingPort;
 
     // CefString(&settings.user_agent).FromASCII("HbbTV/1.4.1 (+DL+PVR+DRM;Samsung;SmartTV2015;T-HKM6DEUC-1490.3;;) OsrTvViewer;Chrome");
     // CefString(&settings.user_agent).FromASCII("HbbTV/1.2.1 (+DL+PVR+DRM;Samsung;SmartTV2015;T-HKM6DEUC-1490.3;;) OsrTvViewer;Chrome");

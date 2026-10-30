@@ -67,6 +67,8 @@ It's up to you to decide what you want to use and test ;)
          this directory. E.g. css, html, javascript and so on.
 -b / --bindall The browser uses every network interface. Could lead to 
          interesting effects if Docker/Incus/LXD is also installed.                  
+-r / --remotedebug <port> Enables the Chromium DevTools on the given
+         port (e.g. 9222). Disabled by default.
 ```
 
 ### Logging
