@@ -285,6 +285,18 @@ int main(int argc, char *argv[]) {
 
     parseCommandLine(argc, argv);
 
+    // Without HOME and XDG_CACHE_HOME (e.g. a systemd service without User=) fontconfig
+    // has no writable cache directory and scans all fonts at every start. Use the cache
+    // directory of the browser instead.
+    if (getenv("XDG_CACHE_HOME") == nullptr && getenv("HOME") == nullptr) {
+        std::string fontCache = cachePath;
+        if (fontCache.empty()) {
+            std::string exepath = getexepath();
+            fontCache = exepath.substr(0, exepath.find_last_of('/')) + "/profile";
+        }
+        setenv("XDG_CACHE_HOME", fontCache.c_str(), 1);
+    }
+
     // Use an own font configuration, the bundled fontconfig of libcef may not understand
     // the system configuration. Set before the subprocesses are started, they inherit it.
     if (getenv("FONTCONFIG_FILE") == nullptr) {
