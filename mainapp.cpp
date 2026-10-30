@@ -85,6 +85,16 @@ CefRefPtr<CefRenderProcessHandler> BrowserApp::GetRenderProcessHandler() {
 
 void BrowserApp::OnBeforeCommandLineProcessing(const CefString& process_type, CefRefPtr<CefCommandLine> command_line) {
     command_line->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
+
+    // Offscreen rendering only needs software compositing, the OSD is drawn by VDR.
+    // Without these switches Chromium tries GLES 3.0 (the RPi4 offers 2.0), the GPU
+    // process fails and is restarted in software mode. Run the remaining GPU thread
+    // inside the browser process, this saves a process and its memory.
+    if (process_type.empty()) {
+        command_line->AppendSwitch("disable-gpu");
+        command_line->AppendSwitch("disable-gpu-compositing");
+        command_line->AppendSwitch("in-process-gpu");
+    }
 }
 
 void BrowserApp::OnContextInitialized() {
