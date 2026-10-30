@@ -48,7 +48,8 @@
             mimeType === 'application/dash+xml' ||
             mimeType === 'application/oipfApplicationManager' ||
             mimeType === 'application/oipfCapabilities' ||
-            mimeType === 'application/oipfConfiguration';
+            mimeType === 'application/oipfConfiguration' ||
+            mimeType === 'application/oipfParentalControlManager';
     };
 
     // The factory methods return embedded objects, which the application adds to
@@ -73,6 +74,11 @@
     window.oipfObjectFactory.createConfigurationObject = function () {
         let obj = createObject('application/oipfConfiguration');
         mixin(window.oipfConfiguration, obj);
+        return obj;
+    };
+    window.oipfObjectFactory.createParentalControlManagerObject = function () {
+        let obj = createObject('application/oipfParentalControlManager');
+        mixin(window.oipfParentalControlManager, obj);
         return obj;
     };
     window.oipfObjectFactory.createCapabilitiesObject = function () {
@@ -305,6 +311,36 @@
 
 
     // 7.9.1 The application/oipfParentalControlManager embedded object ------------
+    // VDR has no parental control: nothing is blocked, the threshold allows everything.
+    window.oipfParentalControlManager = window.oipfParentalControlManager || {};
+
+    (function (pcm) {
+        let threshold = { name: "18", scheme: "dvb-si", value: 15, labels: 0, region: "de" };
+        let dvbSi = {
+            name: "dvb-si",
+            threshold: threshold,
+            length: 15,
+            iconUri: () => null,
+            indexOf: (name) => { let age = parseInt(name, 10); return (age >= 4 && age <= 18) ? age - 4 : -1; },
+            item: (i) => (i >= 0 && i < 15) ? String(i + 4) : null
+        };
+
+        let schemes = [dvbSi];
+        schemes.item = (i) => schemes[i] || null;
+        schemes.getParentalRatingScheme = (name) => schemes.find((x) => x.name === name) || null;
+        schemes.addParentalRatingScheme = () => null;
+
+        pcm.parentalRatingSchemes = schemes;
+        pcm.isPINEntryLocked = false;
+        pcm.getParentalControlStatus = () => false;
+        pcm.getBlockUnrated = () => false;
+        // 0 = correct (there is no PIN), 1 = incorrect, 2 = locked
+        pcm.verifyParentalControlPIN = () => 0;
+        pcm.setParentalControlStatus = () => 0;
+        pcm.setParentalControlPIN = () => 0;
+        pcm.unlockWithParentalControlPIN = () => 0;
+        pcm.setBlockUnrated = () => 0;
+    })(window.oipfParentalControlManager);
 
 
     // 7.10.1 The application/oipfRecordingScheduler embedded object (+PVR) --------
@@ -350,6 +386,9 @@
 
         if (sType === "application/oipfApplicationManager") {
             mixin(window.oipfApplicationManager, oipfPluginObject);
+            oipfPluginObject.style.visibility = "hidden";
+        } else if (sType === "application/oipfParentalControlManager") {
+            mixin(window.oipfParentalControlManager, oipfPluginObject);
             oipfPluginObject.style.visibility = "hidden";
         } else if (sType === "application/oipfConfiguration") {
             mixin(window.oipfConfiguration, oipfPluginObject);
