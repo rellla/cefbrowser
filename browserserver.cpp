@@ -286,15 +286,23 @@ bool BrowserServer::InsertHbbtv(const InsertHbbtvType &input) {
 bool BrowserServer::InsertChannel(const InsertChannelType &input) {
     // TRACE("InsertChannel: {}", body);
 
-    if (input.channel != lastInsertChannel) {
-        // in case of channel switch always stop playing videos
-        std::string reason = "ChannelSwitch";
+    // VDR sends the channel again if its data changes (e.g. the current programme).
+    // Only a different channel is a channel switch.
+    std::string channelId;
+    try {
+        channelId = nlohmann::json::parse(input.channel).value("channelId", "");
+    } catch (nlohmann::json::exception &e) {
+        ERROR("InsertChannel: invalid json: {}", e.what());
+        return false;
+    }
 
+    if (channelId != lastInsertChannel) {
+        // in case of channel switch always stop playing videos
         StopVideoType stopType;
         stopType.reason = "ChannelSwitch";
         StopVideo(stopType);
 
-        lastInsertChannel = input.channel;
+        lastInsertChannel = channelId;
     }
 
     return database->insertChannel(input.channel);
