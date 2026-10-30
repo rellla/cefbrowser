@@ -185,6 +185,119 @@ window._vdrChannelUpdate = function (channel) {
     });
 };
 
+// --- stream events (DSM-CC do-it-now events, filtered by VDR) ---
+
+// registered listeners: { node, componentTag, eventId, name, listener }
+window._vdrStreamEventListeners = [];
+
+function _vdrHexToText(hex) {
+    let bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; ++i) {
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    }
+    try {
+        return new TextDecoder("utf-8").decode(bytes);
+    } catch (e) {
+        return String.fromCharCode.apply(null, bytes);
+    }
+}
+
+function _vdrCallStreamEventListener(listener, event) {
+    try {
+        if (typeof listener === 'function') {
+            listener(event);
+        } else if (listener && typeof listener.handleEvent === 'function') {
+            listener.handleEvent(event);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+window._vdrStreamEvent = function (componentTag, eventId, data, status) {
+    window._vdrStreamEventListeners.forEach((l) => {
+        if (l.componentTag === componentTag && l.eventId === eventId) {
+            _vdrCallStreamEventListener(l.listener, {
+                type: 'StreamEvent',
+                name: l.name,
+                data: data,
+                text: _vdrHexToText(data),
+                status: status
+            });
+        }
+    });
+};
+
+// resolve the event name with the stream event description file (TS 102 809)
+async function _vdrResolveStreamEvent(targetURL, eventName) {
+    const response = await fetch(new URL(targetURL, document.baseURI).href);
+    const xml = new DOMParser().parseFromString(await response.text(), "text/xml");
+
+    for (const object of xml.getElementsByTagName("dsmcc_object")) {
+        for (const event of object.getElementsByTagName("stream_event")) {
+            if (event.getAttribute("stream_event_name") === eventName) {
+                return {
+                    componentTag: Number(object.getAttribute("component_tag")),
+                    eventId: Number(event.getAttribute("stream_event_id"))
+                };
+            }
+        }
+    }
+
+    return null;
+}
+
+function _vdrStreamEventError(name, listener) {
+    _vdrCallStreamEventListener(listener, { type: 'StreamEvent', name: name, data: "", text: "", status: "error" });
+}
+
+function addStreamEventFunctions(node) {
+    node.addStreamEventListener = function (targetURL, eventName, listener) {
+        console.log('addStreamEventListener ' + targetURL + ', ' + eventName);
+
+        // events of the object carousel are not supported
+        if (String(targetURL).startsWith("dvb:")) {
+            setTimeout(() => _vdrStreamEventError(eventName, listener), 0);
+            return;
+        }
+
+        (async () => {
+            let event = null;
+            try {
+                event = await _vdrResolveStreamEvent(targetURL, eventName);
+            } catch (e) {
+                console.log("stream event description " + targetURL + ": " + e);
+            }
+
+            if (!event || isNaN(event.componentTag) || isNaN(event.eventId)) {
+                _vdrStreamEventError(eventName, listener);
+                return;
+            }
+
+            window._vdrStreamEventListeners.push({ node, targetURL, name: eventName, listener,
+                                                    componentTag: event.componentTag, eventId: event.eventId });
+
+            if (!window.cefStreamEventFilter || !window.cefStreamEventFilter(event.componentTag, true)) {
+                _vdrStreamEventError(eventName, listener);
+            }
+        })();
+    };
+
+    node.removeStreamEventListener = function (targetURL, eventName, listener) {
+        let removed = window._vdrStreamEventListeners.filter((l) =>
+            l.node === node && l.targetURL === targetURL && l.name === eventName && l.listener === listener);
+
+        window._vdrStreamEventListeners = window._vdrStreamEventListeners.filter((l) => !removed.includes(l));
+
+        // stop the filter if nobody needs the component anymore
+        removed.forEach((r) => {
+            if (!window._vdrStreamEventListeners.some((l) => l.componentTag === r.componentTag) && window.cefStreamEventFilter) {
+                window.cefStreamEventFilter(r.componentTag, false);
+            }
+        });
+    };
+}
+
 // video/broadcast: channel information and play state
 function addBroadcastFunctions(node) {
     if (node._vdrBroadcast) {
@@ -209,6 +322,7 @@ function addBroadcastFunctions(node) {
     }
 
     window._vdrBroadcastNodes.add(node);
+    addStreamEventFunctions(node);
 
     // 0 = unrealized, 2 = presenting
     node.playState = 0;

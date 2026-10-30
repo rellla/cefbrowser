@@ -330,6 +330,13 @@ bool V8Handler::Execute(const CefString &name, CefRefPtr<CefV8Value> object, con
         transcoderClient->AudioInfo(result, streamId);
         retval = CefV8Value::CreateString(result);
         return true;
+    } else if (name == "StreamEventFilter") {
+        bool result = false;
+        if (arguments.size() >= 2) {
+            result = vdrClient->StreamEventFilter(arguments.at(0)->GetIntValue(), arguments.at(1)->GetBoolValue());
+        }
+        retval = CefV8Value::CreateBool(result);
+        return true;
     } else if (name == "SelectSubtitleTrack") {
         bool result = false;
         if (!arguments.empty()) {

@@ -332,8 +332,19 @@ bool BrowserServer::PlayerStatus(const PlayerStatusType &input) {
 }
 
 bool BrowserServer::StreamEvent(const StreamEventType &input) {
-    // not supported yet
-    return false;
+    GET_BROWSER(browser, false)
+
+    // the private data as hex string, like the data attribute of the StreamEvent
+    static const char *hex = "0123456789abcdef";
+    std::string data;
+    for (unsigned char c : input.privateData) {
+        data += hex[c >> 4];
+        data += hex[c & 0x0F];
+    }
+
+    executeJavaScriptOnUi(browser, "window._vdrStreamEvent && window._vdrStreamEvent(" + std::to_string(input.componentTag) + "," +
+                                   std::to_string(input.eventId) + ",'" + data + "'," + nlohmann::json(input.status).dump() + ");");
+    return true;
 }
 
 CefBrowserIf *BrowserCloneFactory::getHandler(const TConnectionInfo &connInfo) {
