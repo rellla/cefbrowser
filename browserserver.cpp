@@ -303,6 +303,9 @@ bool BrowserServer::InsertChannel(const InsertChannelType &input) {
         StopVideo(stopType);
 
         lastInsertChannel = channelId;
+    } else if (currentBrowser) {
+        // new data of the current channel (e.g. the present programme) for the running application
+        executeJavaScriptOnUi(currentBrowser, "window._vdrChannelUpdate && window._vdrChannelUpdate(" + input.channel + ");");
     }
 
     return database->insertChannel(input.channel);

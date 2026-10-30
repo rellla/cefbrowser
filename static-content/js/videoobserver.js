@@ -105,6 +105,86 @@ async function checkMpd(nodedata) {
     return Math.max(0, Math.floor(mpdStart));
 }
 
+// --- programmes and parental rating of the current channel (from VDR's EPG) ---
+
+function _vdrRatings(list) {
+    let ratings = (list || []).map((r) => ({
+        name: r.name,
+        scheme: r.scheme,
+        value: r.value,
+        labels: 0,
+        region: r.region
+    }));
+    ratings.item = (i) => ratings[i] || null;
+    return ratings;
+}
+
+// OIPF Programme objects of the present and following event
+function _vdrProgrammes() {
+    let channel = window.HBBTV_POLYFILL_NS.currentChannel;
+    let list = ((channel && channel.programmes) || []).map((p) => ({
+        programmeID: p.programmeID,
+        programmeIDType: 2,          // ID_DVB_EVENT
+        name: p.name,
+        description: p.description,
+        longDescription: p.longDescription,
+        startTime: p.startTime,
+        duration: p.duration,
+        channelID: channel.channelId,
+        parentalRatings: _vdrRatings(p.parentalRatings),
+        getField: () => undefined
+    }));
+    list.item = (i) => list[i] || null;
+    return list;
+}
+
+window._vdrBroadcastNodes = new Set();
+
+// VDR sends new data of the current channel, e.g. a new present programme
+window._vdrChannelUpdate = function (channel) {
+    let current = window.HBBTV_POLYFILL_NS.currentChannel;
+    if (!channel || !current || channel.channelId !== current.channelId) {
+        return;
+    }
+
+    let oldPresent = (current.programmes || [])[0];
+    let newPresent = (channel.programmes || [])[0];
+
+    // keep the object, the application may hold a reference
+    Object.assign(current, channel);
+
+    window._vdrBroadcastNodes.forEach((node) => {
+        if (!node.isConnected) {
+            window._vdrBroadcastNodes.delete(node);
+            return;
+        }
+
+        if (typeof node.onProgrammesChanged === 'function') {
+            node.onProgrammesChanged();
+        }
+        node.dispatchEvent(new Event('ProgrammesChanged'));
+
+        let oldRating = oldPresent && oldPresent.parentalRatings && oldPresent.parentalRatings[0] ? oldPresent.parentalRatings[0].value : -1;
+        let newRating = newPresent && newPresent.parentalRatings && newPresent.parentalRatings[0] ? newPresent.parentalRatings[0].value : -1;
+
+        if (newPresent && oldRating !== newRating) {
+            let rating = newRating >= 0 ? _vdrRatings(newPresent.parentalRatings)[0] : null;
+            let contentID = newPresent.programmeID;
+
+            // VDR doesn't block content, blocked is always false
+            if (typeof node.onParentalRatingChange === 'function') {
+                node.onParentalRatingChange(contentID, rating, null, false);
+            }
+            let event = new Event('ParentalRatingChange');
+            event.contentID = contentID;
+            event.ratings = rating ? _vdrRatings(newPresent.parentalRatings) : _vdrRatings([]);
+            event.DRMSystemID = null;
+            event.blocked = false;
+            node.dispatchEvent(event);
+        }
+    });
+};
+
 // video/broadcast: channel information and play state
 function addBroadcastFunctions(node) {
     if (node._vdrBroadcast) {
@@ -118,9 +198,17 @@ function addBroadcastFunctions(node) {
             configurable: true,
             get: () => window.HBBTV_POLYFILL_NS.currentChannel || null
         });
+
+        // present and following programme (META_EIT)
+        Object.defineProperty(node, 'programmes', {
+            configurable: true,
+            get: () => _vdrProgrammes()
+        });
     } catch (e) {
         console.log("currentChannel: " + e);
     }
+
+    window._vdrBroadcastNodes.add(node);
 
     // 0 = unrealized, 2 = presenting
     node.playState = 0;
