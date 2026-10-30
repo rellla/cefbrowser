@@ -343,6 +343,18 @@ int main(int argc, char *argv[]) {
     CefSettings settings;
     settings.windowless_rendering_enabled = true;
     settings.no_sandbox = true;
+    // Chromium's own log follows the log level of cefbrowser. With the default level
+    // (errors only) Chromium logs only fatal errors, its other messages concern
+    // features cefbrowser doesn't use (e.g. D-Bus, GPU, deprecations).
+    switch (loglevel) {
+        case 0:  settings.log_severity = LOGSEVERITY_DISABLE; break;
+        case 1:  settings.log_severity = LOGSEVERITY_FATAL; break;
+        case 2:  settings.log_severity = LOGSEVERITY_ERROR; break;
+        case 3:  settings.log_severity = LOGSEVERITY_WARNING; break;
+        case 4:  settings.log_severity = LOGSEVERITY_VERBOSE; break;
+        default: settings.log_severity = LOGSEVERITY_FATAL; break;
+    }
+
     // remote debugging (DevTools) only on request, it costs memory and opens a port
     settings.remote_debugging_port = remoteDebuggingPort;
 
