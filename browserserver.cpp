@@ -6,6 +6,7 @@
 #include "database.h"
 #include "browserclient.h"
 #include "keycodes.h"
+#include "json.hpp"
 
 std::string lastInsertChannel = "";
 std::string streamId;
@@ -124,8 +125,13 @@ bool BrowserServer::StartApplication(const StartApplicationType &input) {
 
     if (input.url.empty()) {
         _dynamic << "window.HBBTV_POLYFILL_NS.paramBody = '';" << std::endl;
+    } else if (input.appId == "M3U") {
+        // the m3u catalogue is a json object
+        _dynamic << "window.HBBTV_POLYFILL_NS.paramBody = " << input.url << ";" << std::endl;
     } else {
-        _dynamic << "window.HBBTV_POLYFILL_NS.paramBody = " << input.url << std::endl;
+        // an url must be a string literal, otherwise the whole script is invalid
+        // and currentChannel is not set either
+        _dynamic << "window.HBBTV_POLYFILL_NS.paramBody = " << nlohmann::json(input.url).dump() << ";" << std::endl;
     }
 
     _dynamic.close();
