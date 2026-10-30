@@ -9,6 +9,15 @@
 
 std::string lastInsertChannel = "";
 std::string streamId;
+
+// The thrift server runs independently of the browser: requests may arrive before the
+// browser is created or after it has been closed. Keep a reference for the request.
+#define GET_BROWSER(browser, result) \
+    CefRefPtr<CefBrowser> browser = currentBrowser; \
+    if (!browser) { \
+        ERROR("{}: browser not available", __FUNCTION__); \
+        return result; \
+    }
 BrowserParameter BrowserServer::bParameterServer;
 
 BrowserServer::~BrowserServer() {
@@ -23,6 +32,8 @@ void BrowserServer::ping() {
 }
 
 bool BrowserServer::LoadUrl(const LoadUrlType &input) {
+    GET_BROWSER(browser, false)
+
     INFO("Load URL: {}", input.url);
 
     if (input.url == BLANK_PAGE) {
@@ -32,8 +43,8 @@ bool BrowserServer::LoadUrl(const LoadUrlType &input) {
         StopVideo(stopType);
     }
 
-    if (currentBrowser->GetMainFrame() != nullptr) { // Why is it possible, that MainFrame is null?
-        currentBrowser->GetMainFrame()->LoadURL(input.url);
+    if (browser->GetMainFrame() != nullptr) { // Why is it possible, that MainFrame is null?
+        browser->GetMainFrame()->LoadURL(input.url);
     } else {
         ERROR("MainFrame is null");
     }
@@ -42,6 +53,8 @@ bool BrowserServer::LoadUrl(const LoadUrlType &input) {
 }
 
 bool BrowserServer::RedButton(const RedButtonType &input) {
+    GET_BROWSER(browser, false)
+
     INFO("Red Button for channelId: {}", input.channelId);
 
     std::string url;
@@ -70,17 +83,17 @@ bool BrowserServer::RedButton(const RedButtonType &input) {
         _dynamic << "window.HBBTV_POLYFILL_NS = window.HBBTV_POLYFILL_NS || {}; window.HBBTV_POLYFILL_NS.currentChannel = " << channel << std::endl;
         _dynamic.close();
 
-        CefRefPtr<CefClient> currentClient = currentBrowser->GetHost()->GetClient();
+        CefRefPtr<CefClient> currentClient = browser->GetHost()->GetClient();
         auto c = dynamic_cast<BrowserClient *>(currentClient.get());
 
         std::string newUserAgent = database->getUserAgent(input.channelId);
         INFO("Use UserAgent {} for {}", newUserAgent, input.channelId);
-        c->ChangeUserAgent(currentBrowser, newUserAgent);
+        c->ChangeUserAgent(browser, newUserAgent);
         c->enableProcessing(true);
 
         // load url
-        if (currentBrowser->GetMainFrame() != nullptr) { // Why is it possible, that MainFrame is null?
-            currentBrowser->GetMainFrame()->LoadURL(url);
+        if (browser->GetMainFrame() != nullptr) { // Why is it possible, that MainFrame is null?
+            browser->GetMainFrame()->LoadURL(url);
         } else {
             ERROR("MainFrame is null");
             return false;
@@ -91,11 +104,15 @@ bool BrowserServer::RedButton(const RedButtonType &input) {
 }
 
 bool BrowserServer::ReloadOSD() {
-    currentBrowser->GetHost()->Invalidate(PET_VIEW);
+    GET_BROWSER(browser, false)
+
+    browser->GetHost()->Invalidate(PET_VIEW);
     return true;
 }
 
 bool BrowserServer::StartApplication(const StartApplicationType &input) {
+    GET_BROWSER(browser, false)
+
     INFO("Start Application, channelId {}, appId {}, url {}", input.channelId, input.appId, input.url);
 
     std::string channel = database->getChannel(input.channelId);
@@ -113,13 +130,13 @@ bool BrowserServer::StartApplication(const StartApplicationType &input) {
 
     _dynamic.close();
 
-    CefRefPtr<CefClient> currentClient = currentBrowser->GetHost()->GetClient();
+    CefRefPtr<CefClient> currentClient = browser->GetHost()->GetClient();
     auto c = dynamic_cast<BrowserClient *>(currentClient.get());
 
     if (!input.appUserAgent.empty()) {
-        c->ChangeUserAgent(currentBrowser, input.appUserAgent);
+        c->ChangeUserAgent(browser, input.appUserAgent);
     } else {
-        c->ChangeUserAgent(currentBrowser, "");
+        c->ChangeUserAgent(browser, "");
     }
 
     std::string url;
@@ -144,12 +161,19 @@ bool BrowserServer::StartApplication(const StartApplicationType &input) {
     }
 
     // load url
-    currentBrowser->GetMainFrame()->LoadURL(url);
+    auto frame = browser->GetMainFrame();
+    if (frame == nullptr) {
+        ERROR("MainFrame is null");
+        return false;
+    }
+    frame->LoadURL(url);
 
     return true;
 }
 
 bool BrowserServer::ProcessKey(const ProcessKeyType &input) {
+    GET_BROWSER(browser, false)
+
     // HbbTV: the application gets only the keys of its keyset. Returning false
     // tells VDR to handle the key itself (e.g. the numeric keys switch the channel).
     if ((keySetGroup(input.key) & currentKeySet) == 0) {
@@ -171,7 +195,7 @@ bool BrowserServer::ProcessKey(const ProcessKeyType &input) {
         std::ostringstream stringStream;
         stringStream << "window.cefKeyPress('" << input.key << "');";
         auto script = stringStream.str();
-        auto frame = currentBrowser->GetMainFrame();
+        auto frame = browser->GetMainFrame();
 
         if (frame != nullptr) { // Why is it possiböe, that MainFrame is null?
             frame->ExecuteJavaScript(script, frame->GetURL(), 0);
@@ -189,26 +213,31 @@ bool BrowserServer::ProcessKey(const ProcessKeyType &input) {
         keyEvent.modifiers = 0x00;
 
         keyEvent.type = KEYEVENT_RAWKEYDOWN;
-        currentBrowser->GetHost()->SendKeyEvent(keyEvent);
+        browser->GetHost()->SendKeyEvent(keyEvent);
 
         keyEvent.type = KEYEVENT_CHAR;
-        currentBrowser->GetHost()->SendKeyEvent(keyEvent);
+        browser->GetHost()->SendKeyEvent(keyEvent);
 
         keyEvent.type = KEYEVENT_KEYUP;
-        currentBrowser->GetHost()->SendKeyEvent(keyEvent);
+        browser->GetHost()->SendKeyEvent(keyEvent);
     }
 
     return true;
 }
 
 bool BrowserServer::StreamError(const StreamErrorType &input) {
+    GET_BROWSER(browser, false)
+
     ERROR("Transcoder returned a stream error: {}", input.reason);
 
-    std::string script1 = "document.getElementsByTagName('video')[0].currentTime = document.getElementsByTagName('video')[0].duration;";
-    currentBrowser->GetMainFrame()->ExecuteJavaScript(script1, currentBrowser->GetMainFrame()->GetURL(), 0);
+    auto frame = browser->GetMainFrame();
+    if (frame != nullptr) {
+        std::string script1 = "if (document.getElementsByTagName('video')[0]) { document.getElementsByTagName('video')[0].currentTime = document.getElementsByTagName('video')[0].duration; }";
+        frame->ExecuteJavaScript(script1, frame->GetURL(), 0);
 
-    std::string script2 = "window.cefKeyPress('VK_BACK');";
-    currentBrowser->GetMainFrame()->ExecuteJavaScript(script2, currentBrowser->GetMainFrame()->GetURL(), 0);
+        std::string script2 = "window.cefKeyPress('VK_BACK');";
+        frame->ExecuteJavaScript(script2, frame->GetURL(), 0);
+    }
 
     StopVideoType stopType;
     stopType.reason = "stream error";
@@ -240,9 +269,13 @@ bool BrowserServer::InsertChannel(const InsertChannelType &input) {
 }
 
 bool BrowserServer::StopVideo(const StopVideoType &input) {
-    CefRefPtr<CefClient> currentClient = currentBrowser->GetHost()->GetClient();
+    GET_BROWSER(browser, false)
+
+    CefRefPtr<CefClient> currentClient = browser->GetHost()->GetClient();
     auto c = dynamic_cast<BrowserClient *>(currentClient.get());
-    c->getCurrentTranscoderClient()->Stop(streamId, input.reason);
+    if (c != nullptr) {
+        c->getCurrentTranscoderClient()->Stop(streamId, input.reason);
+    }
 
     return true;
 }
