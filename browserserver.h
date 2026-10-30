@@ -39,6 +39,8 @@ public:
     bool InsertHbbtv(const InsertHbbtvType& input) override;
     bool InsertChannel(const InsertChannelType& input) override;
     bool StopVideo(const StopVideoType& input) override;
+    bool PlayerStatus(const PlayerStatusType& input) override;
+    bool StreamEvent(const StreamEventType& input) override;
 };
 
 class BrowserCloneFactory : virtual public CefBrowserIfFactory {

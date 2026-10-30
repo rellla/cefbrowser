@@ -312,6 +312,16 @@ bool BrowserServer::StopVideo(const StopVideoType &input) {
     return true;
 }
 
+bool BrowserServer::PlayerStatus(const PlayerStatusType &input) {
+    // not supported yet
+    return true;
+}
+
+bool BrowserServer::StreamEvent(const StreamEventType &input) {
+    // not supported yet
+    return false;
+}
+
 CefBrowserIf *BrowserCloneFactory::getHandler(const TConnectionInfo &connInfo) {
     std::shared_ptr<TSocket> sock = std::dynamic_pointer_cast<TSocket>(connInfo.transport);
 
