@@ -1,4 +1,6 @@
 #include "mainapp.h"
+#include <thread>
+#include <algorithm>
 
 #include "browserserver.h"
 #include "CefBrowser.h"
@@ -95,6 +97,13 @@ void BrowserApp::OnBeforeCommandLineProcessing(const CefString& process_type, Ce
         command_line->AppendSwitch("disable-gpu");
         command_line->AppendSwitch("disable-gpu-compositing");
         command_line->AppendSwitch("in-process-gpu");
+
+        // software raster: use all cores (Chromium uses at most 4), unless set on the command line
+        if (!command_line->HasSwitch("num-raster-threads")) {
+            unsigned int cores = std::thread::hardware_concurrency();
+            int threads = (int) std::min(4u, std::max(1u, cores));
+            command_line->AppendSwitchWithValue("num-raster-threads", std::to_string(threads));
+        }
     }
 }
 
