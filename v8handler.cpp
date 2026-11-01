@@ -14,6 +14,9 @@ std::atomic<bool> stopVideoThreadRunning(false);
 std::string videoInfo;
 std::string oldVideoInfo;
 
+// the current video is a MSE stream
+std::atomic<bool> videoMse(false);
+
 void V8Handler::stopVdrVideo() {
     int waitTime = 10; // ms
     int count = 5000 / waitTime;
@@ -26,7 +29,7 @@ void V8Handler::stopVdrVideo() {
     if (startVideo) {
         DEBUG("Thread stopVdrVideo, resetVideo");
 
-        vdrClient->ResetVideo(videoInfo);
+        vdrClient->ResetVideo(videoInfo, videoMse);
         videoReset = true;
     } else {
         DEBUG("Thread stopVdrVideo, stopVideo");
@@ -96,6 +99,7 @@ bool V8Handler::Execute(const CefString &name, CefRefPtr<CefV8Value> object, con
     std::string streamId = bParam.browserIp + "_" + std::to_string(bParam.browserPort);
 
     if (name == "StreamVideo") {
+        videoMse = false;
         startVideo = true;
 
         if (!arguments.empty()) {
@@ -184,6 +188,58 @@ bool V8Handler::Execute(const CefString &name, CefRefPtr<CefV8Value> object, con
 
         retval = CefV8Value::CreateString(newVideoUrl);
         return true;
+    } else if (name == "MseStart") {
+        // Media Source Extensions: the segments of the player follow by http requests
+        videoMse = true;
+        startVideo = true;
+
+        std::vector<std::string> tracks;
+        std::string duration = "N/A";
+
+        if (!arguments.empty() && arguments.at(0)->IsArray()) {
+            for (int i = 0; i < arguments.at(0)->GetArrayLength(); ++i) {
+                tracks.push_back(arguments.at(0)->GetValue(i)->GetStringValue().ToString());
+            }
+        }
+
+        if (arguments.size() >= 2 && arguments.at(1)->IsString()) {
+            duration = arguments.at(1)->GetStringValue().ToString();
+        }
+
+        if (isVideoPaused) {
+            std::string reason = "Javascript StopVideo (Start after Pause)";
+            transcoderClient->Stop(streamId, reason);
+            videoReset = true;
+
+            // the VDR player is still paused and would drop all packets of the new video
+            vdrClient->Resume();
+            isVideoPaused = false;
+        }
+
+        oldVideoInfo = videoInfo;
+        videoInfo.clear();
+        if (tracks.empty() || !transcoderClient->MseStart(videoInfo, bParam.browserIp, std::to_string(bParam.browserPort), bParam.vdrIp, std::to_string(bParam.vdrPort), std::to_string(now), duration, tracks)) {
+            videoInfo.clear();
+        }
+
+        if (videoInfo.empty()) {
+            ERROR("MseStart failed: Transcoder not available or another error.");
+            retval = CefV8Value::CreateNull();
+            return true;
+        }
+
+        while (stopVideoThreadRunning) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+
+        if (!videoReset) {
+            vdrClient->StartVideo(videoInfo, true);
+        }
+        videoReset = false;
+
+        std::string newVideoUrl = "http://localhost/movie/transparent-video-" + bParam.browserIp + "_" + std::to_string(bParam.browserPort) + "-" + std::to_string(now) + ".webm";
+        retval = CefV8Value::CreateString(newVideoUrl);
+        return true;
     } else if (name == "StopVideo") {
         isVideoPaused = false;
 
@@ -207,8 +263,14 @@ bool V8Handler::Execute(const CefString &name, CefRefPtr<CefV8Value> object, con
     } else if (name == "PauseVideo") {
         isVideoPaused = true;
 
-        vdrClient->Pause();
-        transcoderClient->Pause(streamId);
+        if (videoMse) {
+            // the transcoder stops sending first, VDR keeps the data of a MSE stream
+            transcoderClient->Pause(streamId);
+            vdrClient->Pause();
+        } else {
+            vdrClient->Pause();
+            transcoderClient->Pause(streamId);
+        }
 
         retval = CefV8Value::CreateBool(true);
         return true;

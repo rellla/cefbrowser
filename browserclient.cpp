@@ -10,6 +10,7 @@
 #include "jsinterception.h"
 #include "trackinginterception.h"
 #include "statichandler.h"
+#include "mserequest.h"
 
 #define QOI_IMPLEMENTATION
 #include "qoi.h"
@@ -234,6 +235,11 @@ CefRefPtr<CefResourceRequestHandler> BrowserClient::GetResourceRequestHandler(Ce
     static std::string browserUrl = std::string("http://") + bParam.browserIp + std::string(":") + std::to_string(bParam.browserPort);
 
     std::string url = request->GetURL().ToString();
+
+    /* MSE segments of the page, never sent to the server */
+    if (MseRequest::IsMseRequest(url)) {
+        return new MseRequest(bParam);
+    }
 
     bool blockThis = TrackingInterception::IsTracker(url);
 

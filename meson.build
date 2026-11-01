@@ -128,7 +128,7 @@ if get_option('debug_thrift')
 endif
 
 sources = ['cefbrowser', 'main.cpp', 'mainapp.cpp', 'logger.cpp',
-           'browserclient.cpp', 'osdsender.cpp', 'browserserver.cpp', 'moviestream.cpp',
+           'browserclient.cpp', 'osdsender.cpp', 'browserserver.cpp', 'moviestream.cpp', 'mserequest.cpp',
            'httpinterception.cpp', 'keycodes.cpp', 'trackinginterception.cpp', 'statichandler.cpp', 'jsinterception.cpp',
            'v8handler.cpp', 'tools.cpp', 'database.cpp', 'xhrinterception.cpp', 'pagemodifier.cpp', 'baseinterception.cpp',
            'thrift-services/src-client/VdrClient.cpp', 'thrift-services/src-client/TranscoderClient.cpp',
