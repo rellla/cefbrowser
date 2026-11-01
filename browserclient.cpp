@@ -28,6 +28,7 @@ BrowserClient::BrowserClient(bool fullscreen, BrowserParameter bp) : bParam(bp) 
     // create clients
     transcoderClient = new TranscoderClient(bParam.transcoderIp, bParam.transcoderPort);
     vdrClient = new VdrClient(bParam.vdrIp, bParam.vdrPort);
+    osdSender = new OsdSender(vdrClient, bParam.osdqoi == QOI);
 
     streamId = bParam.browserIp + "_" + std::to_string(bParam.browserPort);
 }
@@ -37,6 +38,10 @@ BrowserClient::~BrowserClient() {
 
     delete transcoderClient;
     transcoderClient = nullptr;
+
+    // the sender uses the vdr client
+    delete osdSender;
+    osdSender = nullptr;
 
     delete vdrClient;
     vdrClient = nullptr;
@@ -64,60 +69,19 @@ void BrowserClient::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type
         return;
     }
 
-    RectList recList;
+    std::vector<CefRect> rects;
     if (bParam.use_dirty_recs) {
-        recList = dirtyRects;
+        rects.assign(dirtyRects.begin(), dirtyRects.end());
     } else {
-        CefRect rect(0, 0, width, height);
-        recList.emplace_back(rect);
+        rects.emplace_back(0, 0, width, height);
     }
 
 #if ONPAINT_MEASURE_TIME == 1
     auto begin = std::chrono::high_resolution_clock::now();
 #endif
 
-    // iterate overall dirty recs
-    for (auto r : recList) {
-        uint32_t* outbuffer = new uint32_t[r.width * r.height];
-        memset(outbuffer, 0, r.width * r.height);
-
-        // copy the region
-        uint32_t* ci = (uint32_t *) buffer + (r.y * width + r.x);
-        uint32_t* co = (uint32_t *) outbuffer;
-
-        for (int dry = 0; dry < r.height; ++dry) {
-            memcpy(co, ci, r.width * 4);
-            ci += width;
-            co += r.width;
-        }
-
-        // delete parts of the OSD where a video shall be visible
-        for (uint32_t i = 0; i < (uint32_t) (r.width * r.height); ++i) {
-            if (outbuffer[i] == 0xfffe2e9a) {
-                outbuffer[i] = 0x00fe2e9a;
-            }
-        }
-
-        if (bParam.osdqoi == QOI) {
-            qoi_desc desc{
-                    .width = static_cast<unsigned int>(r.width),
-                    .height = static_cast<unsigned int>(r.height),
-                    .channels = 4,
-                    .colorspace = QOI_LINEAR
-            };
-
-            int out_len = 0;
-            char *encoded_image = static_cast<char *>(qoi_encode(outbuffer, &desc, &out_len));
-
-            vdrClient->ProcessOsdUpdateQoi(renderWidth, renderHeight, r.x, r.y, std::string(encoded_image, out_len));
-            free(encoded_image);
-        } else {
-            std::string data = std::string((char *)outbuffer, r.width * r.height * 4);
-            vdrClient->ProcessOsdUpdate(renderWidth, renderHeight, r.x, r.y, r.width, r.height, data);
-        }
-
-        delete[] outbuffer;
-    }
+    // only copy the changed regions, the OSD is sent in its own thread
+    osdSender->Paint(buffer, width, height, rects);
 
 #if ONPAINT_MEASURE_TIME == 1
     auto end = std::chrono::high_resolution_clock::now();

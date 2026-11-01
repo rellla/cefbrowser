@@ -6,6 +6,7 @@
 #include "cpr/connection_pool.h"
 #include "thrift-services/src-client/TranscoderClient.h"
 #include "thrift-services/src-client/VdrClient.h"
+#include "osdsender.h"
 
 class BrowserClient : public CefClient,
                       public CefRenderHandler,
@@ -110,6 +111,7 @@ private:
     bool videoIsFullscreen;
 
     VdrClient* vdrClient;
+    OsdSender* osdSender;
     TranscoderClient *transcoderClient;
 
     CefRefPtr<CefRegistration> registration;
