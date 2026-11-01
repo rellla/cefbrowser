@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <atomic>
 
 const std::string BLANK_PAGE = "http://localhost/internal/blank/page";
 
@@ -44,3 +45,11 @@ bool zoomForWidth(int width, int &height, double &zoomLevel);
 void writeZoomScript(const std::string& staticPath, int width, int height, double zoomLevel);
 bool startsWith(const std::string& str, const std::string& prefix);
 std::string readFile(const char *filename);
+
+// options of the VDR setup, used by the next page
+struct BrowserOptions {
+    std::atomic<bool> mse { true };          // Media Source Extensions for VDR
+    std::atomic<bool> zdfQuirks { true };    // special handling of the ZDF applications
+};
+
+extern BrowserOptions browserOptions;

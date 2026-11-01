@@ -411,5 +411,11 @@ void BrowserCloneFactory::releaseHandler(CommonServiceIf *handler) {
 }
 
 bool BrowserServer::SetBrowserOptions(const BrowserOptionsType &input) {
+    if (browserOptions.mse != input.mse || browserOptions.zdfQuirks != input.zdfQuirks) {
+        INFO("Browser options: MSE {}, ZDF special handling {}", input.mse ? "on" : "off", input.zdfQuirks ? "on" : "off");
+    }
+
+    browserOptions.mse = input.mse;
+    browserOptions.zdfQuirks = input.zdfQuirks;
     return true;
 }

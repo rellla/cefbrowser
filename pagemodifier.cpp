@@ -1,3 +1,4 @@
+#include <vector>
 #include "tools.h"
 #include "pagemodifier.h"
 
@@ -41,7 +42,10 @@ std::string PageModifier::getDynamicZoom() {
 std::string PageModifier::injectAll(std::string_view source) {
     std::string result = std::string{source};
 
-    std::string preJs[] = {"simple-tinyduration.js", "mutation-summary.js", "init.js", "keyhandler.js", "mse.js" };
+    std::vector<std::string> preJs = {"simple-tinyduration.js", "mutation-summary.js", "init.js", "keyhandler.js" };
+    if (browserOptions.mse) {
+        preJs.push_back("mse.js");
+    }
     for (const auto & file : preJs) {
         std::string insert = "\n<script type=\"text/javascript\" src=\"http://localhost/js/" + file + "\"></script>\n";
         result = insertAfterHead(result, insert);
@@ -49,6 +53,12 @@ std::string PageModifier::injectAll(std::string_view source) {
 
     std::string dyn1 = getDynamicJs();
     result = insertAfterHead(result, dyn1);
+
+    // the options of the VDR setup, before all other scripts
+    std::string options = std::string("\n<script type=\"text/javascript\">window._vdrOptions = { mse: ") +
+                          (browserOptions.mse ? "true" : "false") + ", zdfQuirks: " +
+                          (browserOptions.zdfQuirks ? "true" : "false") + " };</script>\n";
+    result = insertAfterHead(result, options);
 
     std::string postJs[] = { "video_quirks.js", "avcomponents.js", "videoobserver.js", "hbbtv.js", "initlast.js" };
     for (const auto & file : postJs) {

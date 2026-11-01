@@ -1,4 +1,5 @@
 #include "xhrinterception.h"
+#include "tools.h"
 #include "json.hpp"
 #include "logger.h"
 
@@ -25,7 +26,8 @@ void XhrInterception::modifyResponse() {
             TRACE("[XhrInterception] Json (flatten):\n{}", to_string(j_flat));
         }
 
-        if ((cprResponse.url.str().find("new-hbbtv.zdf.de/al/video-pages/by-canonical") != std::string::npos) && (cprResponse.url.str().find("livestreams=true") != std::string::npos)) {
+        // ZDF special handling: the video URLs are hidden from the dash player
+        if (browserOptions.zdfQuirks && (cprResponse.url.str().find("new-hbbtv.zdf.de/al/video-pages/by-canonical") != std::string::npos) && (cprResponse.url.str().find("livestreams=true") != std::string::npos)) {
             for (auto& el : j_flat.items()) {
                 // std::cout << "key: " << el.key() << ", value:" << el.value() << '\n';
                 if (el.key().find("h264_aac_mp4_http_mpd_http") != std::string::npos && el.key().find("url") != std::string::npos) {
@@ -49,7 +51,7 @@ void XhrInterception::modifyResponse() {
         };
 
         if (cprResponse.url.str().find("-hbbtv.zdf.de/ds/configuration") != std::string::npos) {
-            if (dataJson.is_object() && dataJson.contains("dash")) {
+            if (browserOptions.zdfQuirks && dataJson.is_object() && dataJson.contains("dash")) {
                 dataJson["dash"] = false;
             }
         } else if (cprResponse.url.str().find("hbbtv.zdf.de") != std::string::npos) {

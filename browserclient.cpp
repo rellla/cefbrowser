@@ -355,7 +355,7 @@ CefRefPtr<CefResourceRequestHandler> BrowserClient::GetResourceRequestHandler(Ce
     }
 
     // Javascript interception
-    if ((request->GetResourceType()) == RT_SCRIPT &&
+    if ((request->GetResourceType()) == RT_SCRIPT && browserOptions.zdfQuirks &&
         (url.find("new-hbbtv.zdf.de/static/js/main.") != std::string::npos)) {
         return new JSInterception(pool);
     }
