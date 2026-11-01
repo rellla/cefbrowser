@@ -42,6 +42,7 @@ public:
     bool PlayerStatus(const PlayerStatusType& input) override;
     bool StreamEvent(const StreamEventType& input) override;
     bool SetRenderParameters(const RenderParametersType& input) override;
+    bool SetBrowserOptions(const BrowserOptionsType& input) override;
 };
 
 class BrowserCloneFactory : virtual public CefBrowserIfFactory {

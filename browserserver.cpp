@@ -409,3 +409,7 @@ CefBrowserIf *BrowserCloneFactory::getHandler(const TConnectionInfo &connInfo) {
 void BrowserCloneFactory::releaseHandler(CommonServiceIf *handler) {
     delete handler;
 }
+
+bool BrowserServer::SetBrowserOptions(const BrowserOptionsType &input) {
+    return true;
+}
