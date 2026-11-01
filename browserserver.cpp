@@ -347,6 +347,11 @@ bool BrowserServer::StreamEvent(const StreamEventType &input) {
     return true;
 }
 
+bool BrowserServer::SetRenderParameters(const RenderParametersType &input) {
+    // not supported yet
+    return false;
+}
+
 CefBrowserIf *BrowserCloneFactory::getHandler(const TConnectionInfo &connInfo) {
     std::shared_ptr<TSocket> sock = std::dynamic_pointer_cast<TSocket>(connInfo.transport);
 
