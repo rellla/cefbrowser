@@ -17,7 +17,7 @@ std::string streamId;
 // The thrift server runs independently of the browser: requests may arrive before the
 // browser is created or after it has been closed. Keep a reference for the request.
 #define GET_BROWSER(browser, result) \
-    CefRefPtr<CefBrowser> browser = currentBrowser; \
+    CefRefPtr<CefBrowser> browser = getCurrentBrowser(); \
     if (!browser) { \
         ERROR("{}: browser not available", __FUNCTION__); \
         return result; \
@@ -306,9 +306,9 @@ bool BrowserServer::InsertChannel(const InsertChannelType &input) {
         StopVideo(stopType);
 
         lastInsertChannel = channelId;
-    } else if (currentBrowser) {
+    } else if (CefRefPtr<CefBrowser> browser = getCurrentBrowser()) {
         // new data of the current channel (e.g. the present programme) for the running application
-        executeJavaScriptOnUi(currentBrowser, "window._vdrChannelUpdate && window._vdrChannelUpdate(" + input.channel + ");");
+        executeJavaScriptOnUi(browser, "window._vdrChannelUpdate && window._vdrChannelUpdate(" + input.channel + ");");
     }
 
     return database->insertChannel(input.channel);

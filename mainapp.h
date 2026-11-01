@@ -37,4 +37,6 @@ private:
     DISALLOW_COPY_AND_ASSIGN(BrowserApp);
 };
 
-extern scoped_refptr<CefBrowser> currentBrowser;
+// the browser, used by the UI thread, the thrift threads and others
+CefRefPtr<CefBrowser> getCurrentBrowser();
+void setCurrentBrowser(CefRefPtr<CefBrowser> browser);

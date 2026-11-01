@@ -83,7 +83,10 @@ void signal_handler(int signal)
     database->shutdown();
     delete database;
 
-    currentBrowser->GetHost()->CloseBrowser(true);
+    CefRefPtr<CefBrowser> browser = getCurrentBrowser();
+    if (browser) {
+        browser->GetHost()->CloseBrowser(true);
+    }
     app = nullptr;
 
     CefQuitMessageLoop();

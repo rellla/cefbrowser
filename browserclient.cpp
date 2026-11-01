@@ -1,6 +1,7 @@
 #include <chrono>
 #include <algorithm>
 #include "browserclient.h"
+#include "mainapp.h"
 #include "keycodes.h"
 #include "database.h"
 #include "tools.h"
@@ -17,7 +18,6 @@
 
 #define ONPAINT_MEASURE_TIME 0
 
-extern scoped_refptr<CefBrowser> currentBrowser;
 
 BrowserClient::BrowserClient(bool fullscreen, BrowserParameter bp) : bParam(bp) {
     LOG_CURRENT_THREAD();
@@ -104,8 +104,9 @@ void BrowserClient::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
     LOG_CURRENT_THREAD();
     TRACE("BrowserClient::OnBeforeClose");
 
-    if (browser->IsSame(currentBrowser)) {
-        currentBrowser = nullptr;
+    CefRefPtr<CefBrowser> current = getCurrentBrowser();
+    if (current && browser->IsSame(current)) {
+        setCurrentBrowser(nullptr);
     }
 }
 
