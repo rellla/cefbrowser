@@ -26,7 +26,8 @@ private:
     void sendMessageToProcess(std::string message, std::string parameter);
     void sendMessageToProcess(std::string message, std::vector<std::string>& parameter);
 
-    void stopVdrVideo();
+    void stopVdrVideo(uint64_t generation);
+    void startVdrVideo(bool mse, bool playerReset);
 
     IMPLEMENT_REFCOUNTING(V8Handler);
 };
