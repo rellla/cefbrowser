@@ -2,6 +2,7 @@
 
 #include "browserserver.h"
 #include "CefBrowser.h"
+#include "TransportBuffer.h"
 #include <thrift/transport/TSocket.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
@@ -44,7 +45,7 @@ void startServer(BrowserParameter bParam) {
     thriftServer = new TThreadedServer(
             std::make_shared<CefBrowserProcessorFactory>(std::make_shared<BrowserCloneFactory>()),
             std::make_shared<TServerSocket>(listenIp, bParam.browserPort),
-            std::make_shared<TBufferedTransportFactory>(),
+            std::make_shared<TLargeBufferedTransportFactory>(),
             std::make_shared<TBinaryProtocolFactory>());
 
     thriftServer->serve();
