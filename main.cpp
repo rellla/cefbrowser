@@ -45,6 +45,7 @@ bool use_dirty_recs;
 
 bool bindAll;
 int remoteDebuggingPort = 0;
+bool measure = false;
 
 CefRefPtr<BrowserApp> app;
 
@@ -108,6 +109,7 @@ void parseCommandLine(int argc, char *argv[]) {
             { "uagent",      optional_argument, nullptr, 'u' },
             { "browserdb",   optional_argument, nullptr, 'd' },
             { "remotedebug", required_argument, nullptr, 'r' },
+            { "measure",     no_argument,       nullptr, 'm' },
             { nullptr }
     };
 
@@ -124,7 +126,7 @@ void parseCommandLine(int argc, char *argv[]) {
     staticPath = getexepath();
     staticPath = staticPath.substr(0, staticPath.find_last_of('/'));
 
-    while ((c = getopt_long(argc, argv, "qc:l:z:fp:s:bu:d:a:r:", long_options, &option_index)) != -1)
+    while ((c = getopt_long(argc, argv, "qc:l:z:fp:s:bu:d:a:r:m", long_options, &option_index)) != -1)
     {
         switch (c)
         {
@@ -202,6 +204,10 @@ void parseCommandLine(int argc, char *argv[]) {
 
             case 'r':
                 remoteDebuggingPort = atoi(optarg);
+                break;
+
+            case 'm':
+                measure = true;
                 break;
 
             default:
@@ -345,6 +351,7 @@ int main(int argc, char *argv[]) {
     bParameter.use_dirty_recs = use_dirty_recs;
     bParameter.static_path = staticPath;
     bParameter.bindAll = bindAll;
+    bParameter.measure = measure;
     bParameter.user_agent_path = userAgentPath;
 
     // Main browser process

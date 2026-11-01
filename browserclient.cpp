@@ -28,7 +28,7 @@ BrowserClient::BrowserClient(bool fullscreen, BrowserParameter bp) : bParam(bp) 
     // create clients
     transcoderClient = new TranscoderClient(bParam.transcoderIp, bParam.transcoderPort);
     vdrClient = new VdrClient(bParam.vdrIp, bParam.vdrPort);
-    osdSender = new OsdSender(vdrClient, bParam.osdqoi == QOI);
+    osdSender = new OsdSender(vdrClient, bParam.osdqoi == QOI, bParam.measure);
 
     streamId = bParam.browserIp + "_" + std::to_string(bParam.browserPort);
 }

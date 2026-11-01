@@ -220,6 +220,9 @@ bool BrowserServer::ProcessKey(const ProcessKeyType &input) {
         return false;
     }
 
+    // measurement (--measure): time from the key to the frame at VDR
+    OsdSender::KeyPressed(input.key);
+
     if ((input.key.find("VK_BACK") != std::string::npos) ||
         (input.key.find("VK_RED") != std::string::npos) ||
         (input.key.find("VK_GREEN") != std::string::npos) ||

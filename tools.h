@@ -30,6 +30,7 @@ typedef struct BrowserParameter {
     std::string user_agent_path;
 
     bool bindAll;
+    bool measure = false;
 
     image_type_enum image_type;
 } BrowserParameter;

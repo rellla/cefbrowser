@@ -11,7 +11,23 @@
 #define VIDEO_KEY_COLOR    0xfffe2e9a
 #define VIDEO_TRANSPARENT  0x00fe2e9a
 
-OsdSender::OsdSender(VdrClient *client, bool qoi) : vdrClient(client), useQoi(qoi) {
+// measurement: the last key sent to the page
+static std::mutex keyMutex;
+static std::string keyName;
+static std::chrono::steady_clock::time_point keyTime;
+
+void OsdSender::KeyPressed(const std::string &key) {
+    std::lock_guard<std::mutex> lock(keyMutex);
+    keyName = key;
+    keyTime = std::chrono::steady_clock::now();
+}
+
+static double ms(std::chrono::steady_clock::duration d) {
+    return std::chrono::duration<double, std::milli>(d).count();
+}
+
+OsdSender::OsdSender(VdrClient *client, bool qoi, bool measure) : vdrClient(client), useQoi(qoi), measure(measure) {
+    statsStart = clock::now();
     thread = std::thread(&OsdSender::Run, this);
 }
 
@@ -55,6 +71,21 @@ void OsdSender::AddDirty(const CefRect &rect) {
 void OsdSender::Paint(const void *buffer, int width, int height, const std::vector<CefRect> &rects) {
     {
         std::lock_guard<std::mutex> lock(mutex);
+
+        if (measure) {
+            auto now = clock::now();
+            if (dirty.empty()) {
+                firstPaint = now;
+            }
+
+            // the first frame after a key
+            std::lock_guard<std::mutex> keyLock(keyMutex);
+            if (!keyName.empty() && keyPaintName.empty()) {
+                keyPaintName = keyName;
+                keyPaint = now;
+                INFO("[measure] key {}: first frame rendered after {:.1f} ms", keyName, ms(now - keyTime));
+            }
+        }
 
         // a new size: the whole frame is new
         std::vector<CefRect> regions = rects;
@@ -100,6 +131,7 @@ void OsdSender::Paint(const void *buffer, int width, int height, const std::vect
 void OsdSender::Run() {
     while (true) {
         int width, height;
+        clock::time_point waitStart;
         std::vector<CefRect> rects;
         std::vector<std::string> data;
 
@@ -114,6 +146,7 @@ void OsdSender::Run() {
             rects.swap(dirty);
             width = frameWidth;
             height = frameHeight;
+            waitStart = firstPaint;
 
             // copy the regions, the frame may change while sending
             for (const auto &r : rects) {
@@ -131,7 +164,54 @@ void OsdSender::Run() {
             }
         }
 
+        size_t bytes = 0;
+        for (const auto &d : data) {
+            bytes += d.size();
+        }
+
+        auto sendStart = clock::now();
         Send(width, height, rects, data);
+
+        if (measure) {
+            Measure(waitStart, sendStart, (int) rects.size(), bytes);
+        }
+    }
+}
+
+void OsdSender::Measure(clock::time_point waitStart, clock::time_point sendStart, int rects, size_t bytes) {
+    auto now = clock::now();
+    double send = ms(now - sendStart);
+
+    // the frame of a key has arrived at VDR
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!keyPaintName.empty()) {
+            std::lock_guard<std::mutex> keyLock(keyMutex);
+            INFO("[measure] key {}: frame at VDR after {:.1f} ms (sending {:.1f} ms)", keyPaintName, ms(now - keyTime), send);
+            if (keyName == keyPaintName) {
+                keyName.clear();
+            }
+            keyPaintName.clear();
+        }
+    }
+
+    statsFrames++;
+    statsRects += rects;
+    statsBytes += bytes;
+    statsWait += ms(sendStart - waitStart);
+    statsSend += send;
+    statsSendMax = std::max(statsSendMax, send);
+
+    double elapsed = ms(now - statsStart);
+    if (elapsed >= 5000) {
+        INFO("[measure] OSD: {} frames in {:.1f} s, {:.1f} regions/frame, {:.1f} MB, wait {:.1f} ms, send avg {:.1f} max {:.1f} ms",
+             statsFrames, elapsed / 1000, (double) statsRects / statsFrames, statsBytes / 1048576.0,
+             statsWait / statsFrames, statsSend / statsFrames, statsSendMax);
+
+        statsStart = now;
+        statsFrames = statsRects = 0;
+        statsBytes = 0;
+        statsWait = statsSend = statsSendMax = 0;
     }
 }
 

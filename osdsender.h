@@ -4,6 +4,9 @@
 #include <mutex>
 #include <thread>
 #include <condition_variable>
+#include <chrono>
+#include <atomic>
+#include <string>
 #include "cef_includes.h"
 #include "thrift-services/src-client/VdrClient.h"
 
@@ -15,11 +18,14 @@
 // latest state: frames which arrive while sending are merged.
 class OsdSender {
 public:
-    OsdSender(VdrClient *client, bool qoi);
+    OsdSender(VdrClient *client, bool qoi, bool measure = false);
     ~OsdSender();
 
     // called from OnPaint()
     void Paint(const void *buffer, int width, int height, const std::vector<CefRect> &rects);
+
+    // measurement: a key has been sent to the page
+    static void KeyPressed(const std::string &key);
 
 private:
     void Run();
@@ -39,4 +45,20 @@ private:
     std::vector<CefRect> dirty;       // regions not sent yet
 
     std::thread thread;
+
+    // measurement (--measure)
+    using clock = std::chrono::steady_clock;
+    bool measure;
+    clock::time_point firstPaint;          // first Paint() not sent yet
+    clock::time_point keyPaint;            // first Paint() after a key
+    std::string keyPaintName;
+    clock::time_point statsStart;
+    int statsFrames = 0;
+    int statsRects = 0;
+    size_t statsBytes = 0;
+    double statsWait = 0;
+    double statsSend = 0;
+    double statsSendMax = 0;
+
+    void Measure(clock::time_point waitStart, clock::time_point sendStart, int rects, size_t bytes);
 };
