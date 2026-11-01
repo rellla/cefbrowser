@@ -41,7 +41,7 @@ std::string PageModifier::getDynamicZoom() {
 std::string PageModifier::injectAll(std::string_view source) {
     std::string result = std::string{source};
 
-    std::string preJs[] = {"simple-tinyduration.js", "mutation-summary.js", "init.js", "keyhandler.js" };
+    std::string preJs[] = {"simple-tinyduration.js", "mutation-summary.js", "init.js", "keyhandler.js", "mse.js" };
     for (const auto & file : preJs) {
         std::string insert = "\n<script type=\"text/javascript\" src=\"http://localhost/js/" + file + "\"></script>\n";
         result = insertAfterHead(result, insert);
