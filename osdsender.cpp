@@ -136,8 +136,18 @@ void OsdSender::Run() {
 }
 
 void OsdSender::Send(int width, int height, const std::vector<CefRect> &rects, std::vector<std::string> &data) {
+    // all regions of the frame in one request, VDR flushes the OSD once
+    std::vector<OsdRectType> osdRects;
+    osdRects.reserve(rects.size());
+
     for (size_t i = 0; i < rects.size(); ++i) {
         const auto &r = rects[i];
+
+        OsdRectType rect;
+        rect.x = r.x;
+        rect.y = r.y;
+        rect.width = r.width;
+        rect.height = r.height;
 
         if (useQoi) {
             qoi_desc desc {
@@ -149,12 +159,19 @@ void OsdSender::Send(int width, int height, const std::vector<CefRect> &rects, s
 
             int out_len = 0;
             char *encoded = static_cast<char *>(qoi_encode(data[i].data(), &desc, &out_len));
-            if (encoded != nullptr) {
-                vdrClient->ProcessOsdUpdateQoi(width, height, r.x, r.y, std::string(encoded, out_len));
-                free(encoded);
+            if (encoded == nullptr) {
+                continue;
             }
+            rect.data.assign(encoded, out_len);
+            free(encoded);
         } else {
-            vdrClient->ProcessOsdUpdate(width, height, r.x, r.y, r.width, r.height, data[i]);
+            rect.data.swap(data[i]);
         }
+
+        osdRects.push_back(std::move(rect));
+    }
+
+    if (!osdRects.empty()) {
+        vdrClient->ProcessOsdFrame(width, height, useQoi, osdRects);
     }
 }
