@@ -61,6 +61,7 @@ public:
 
     // RenderHandler
     void setRenderSize(int width, int height);
+    int getRenderWidth() const { return renderWidth; }
 
     void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect) override;
 

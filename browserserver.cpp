@@ -348,8 +348,44 @@ bool BrowserServer::StreamEvent(const StreamEventType &input) {
 }
 
 bool BrowserServer::SetRenderParameters(const RenderParametersType &input) {
-    // not supported yet
-    return false;
+    GET_BROWSER(browser, false)
+
+    int height = 0;
+    double zoomLevel = 1.0;
+    bool newSize = input.width > 0 && zoomForWidth(input.width, height, zoomLevel);
+
+    if (input.width > 0 && !newSize) {
+        ERROR("SetRenderParameters: unsupported width {}", input.width);
+    }
+
+    int width = input.width;
+    int frameRate = input.frameRate;
+    std::string staticPath = bParameterServer.static_path;
+
+    runOnUiThread([browser, newSize, width, height, zoomLevel, frameRate, staticPath]() {
+        if (frameRate > 0 && frameRate != browser->GetHost()->GetWindowlessFrameRate()) {
+            INFO("Set frame rate to {}", frameRate);
+            browser->GetHost()->SetWindowlessFrameRate(frameRate);
+        }
+
+        if (newSize) {
+            CefRefPtr<CefClient> client = browser->GetHost()->GetClient();
+            auto c = dynamic_cast<BrowserClient *>(client.get());
+            if (c == nullptr || c->getRenderWidth() == width) {
+                return;
+            }
+
+            INFO("Set render size to {}x{}", width, height);
+            writeZoomScript(staticPath, width, height, zoomLevel);
+            c->setRenderSize(width, height);
+            browser->GetHost()->WasResized();
+
+            // the zoom of the page is set when it is loaded
+            browser->Reload();
+        }
+    });
+
+    return true;
 }
 
 CefBrowserIf *BrowserCloneFactory::getHandler(const TConnectionInfo &connInfo) {

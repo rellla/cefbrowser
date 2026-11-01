@@ -471,12 +471,7 @@ int main(int argc, char *argv[]) {
     sigaction(SIGQUIT, &sigIntHandler, nullptr);
 
     // write zoom level script
-    std::ofstream _zoom_level;
-    _zoom_level.open (staticPath + "/js/_zoom_level.js", std::ios_base::trunc);
-    _zoom_level << "document.body.style[\"zoom\"] = " << zoom_level << ";\n" << std::endl;
-    _zoom_level << "document.body.style[\"width\"] = \"" << zoom_width << "px\";\n" << std::endl;
-    _zoom_level << "document.body.style[\"height\"] = \"" << zoom_height << "px\";\n" << std::endl;
-    _zoom_level.close();
+    writeZoomScript(staticPath, zoom_width, zoom_height, zoom_level);
 
     // Run the CEF message loop. This will block until CefQuitMessageLoop() is called.
     CefRunMessageLoop();
